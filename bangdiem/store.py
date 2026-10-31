@@ -1,0 +1,202 @@
+"""Lưu trữ bền vững trong SQLite.
+
+Mỗi lời gọi API mở một phiên: nạp trạng thái từ SQLite thành đối tượng ``engine.Db``,
+cho bộ máy quy trình xử lý, rồi ghi lại trong **một giao dịch** (all-or-nothing).
+Một khóa toàn cục tuần tự hóa các phiên ghi để hai người thao tác cùng lúc không đè dữ liệu
+của nhau. Quy mô một trường (vài nghìn yêu cầu/năm) phù hợp với cách làm này; khi cần mở rộng,
+thay lớp này bằng PostgreSQL + ORM mà không phải sửa ``engine.py``.
+"""
+from __future__ import annotations
+
+import json
+import sqlite3
+import threading
+import time
+from contextlib import contextmanager
+from pathlib import Path
+
+from . import engine as E
+
+SCHEMA = Path(__file__).with_name("schema.sql")
+
+REQ_JSON = {  # cột JSON ↔ khóa trong đối tượng yêu cầu
+    "form_json": "form", "options_json": "options", "validation_json": "validation", "check_json": "check",
+    "acks_json": "acks", "transcript_json": "transcript", "auto_checks_json": "autoChecks", "feedback_json": "feedback",
+    "signature_json": "signature", "timers_json": "timers", "paper_json": "paper", "branches_json": "branches",
+    "student_snapshot_json": "studentSnapshot",
+}
+STUDENT_COLS = {"mssv": "mssv", "ho_ten": "hoTen", "ngay_sinh": "ngaySinh", "gioi_tinh": "gioiTinh", "lop": "lop",
+                "khoa": "khoa", "nganh": "nganh", "khoa_hoc": "khoaHoc", "email": "email", "trang_thai": "trangThai"}
+GRADE_COLS = {"id": "id", "mssv": "mssv", "nam_hoc": "namHoc", "hoc_ky": "hocKy", "ma_hp": "maHP", "ten_hp": "tenHP",
+              "so_tc": "soTC", "diem_10": "diem10", "diem_chu": "diemChu"}
+
+_lock = threading.RLock()
+
+
+def _dumps(v) -> str | None:
+    return None if v is None else json.dumps(v, ensure_ascii=False)
+
+
+def _loads(s):
+    return None if s is None else json.loads(s)
+
+
+def _int_if_whole(v):
+    if isinstance(v, float) and v.is_integer():
+        return int(v)
+    return v
+
+
+class Store:
+    def __init__(self, path: str | Path):
+        self.path = str(path)
+        Path(self.path).parent.mkdir(parents=True, exist_ok=True)
+        c = self.connect()
+        try:
+            c.executescript(SCHEMA.read_text(encoding="utf-8"))
+        finally:
+            c.close()
+
+    def connect(self) -> sqlite3.Connection:
+        c = sqlite3.connect(self.path, timeout=30, isolation_level=None)  # tự quản lý giao dịch
+        c.row_factory = sqlite3.Row
+        c.execute("PRAGMA foreign_keys = ON")
+        c.execute("PRAGMA journal_mode = WAL")
+        return c
+
+    def is_empty(self) -> bool:
+        c = self.connect()
+        try:
+            return c.execute("SELECT COUNT(*) FROM settings").fetchone()[0] == 0
+        finally:
+            c.close()
+
+    # ------------------------------------------------------------------ nạp
+    def load(self, c: sqlite3.Connection) -> E.Db:
+        db = E.Db()
+        st = {r["key"]: json.loads(r["value"]) for r in c.execute("SELECT key, value FROM settings")}
+        db.config = {**E.DEFAULT_CONFIG, **st.get("config", {})}
+        db.seq = {**db.seq, **st.get("seq", {})}
+        db.clock_offset = int(st.get("clockOffset", 0))
+        db.fault = bool(st.get("fault", False))
+        db.students = [{v: r[k] for k, v in STUDENT_COLS.items()} for r in c.execute("SELECT * FROM students ORDER BY rowid")]
+        for r in c.execute("SELECT * FROM grades ORDER BY rowid"):
+            g = {v: r[k] for k, v in GRADE_COLS.items()}
+            g["soTC"] = _int_if_whole(g["soTC"])
+            if isinstance(g["diem10"], int):
+                g["diem10"] = float(g["diem10"])
+            g["diemChu"] = g["diemChu"] or ""
+            db.grades.append(g)
+        hist: dict[str, list] = {}
+        for r in c.execute("SELECT * FROM request_history ORDER BY request_id, seq"):
+            hist.setdefault(r["request_id"], []).append(
+                {"t": r["t"], "step": r["step"], "actor": r["actor"], "note": r["note"] or "", "kind": r["kind"]})
+        for r in c.execute("SELECT * FROM requests ORDER BY created_at, id"):
+            req = {"id": r["id"], "status": r["status"], "createdAt": r["created_at"], "updatedAt": r["updated_at"],
+                   "attempts": r["attempts"], "transcriptVersions": r["transcript_versions"],
+                   "decisionNote": r["decision_note"] or "", "approvedBy": r["approved_by"], "history": hist.get(r["id"], [])}
+            for col, key in REQ_JSON.items():
+                req[key] = _loads(r[col])
+            req["acks"] = req["acks"] or []
+            req["feedback"] = req["feedback"] or []
+            req["timers"] = req["timers"] or {}
+            req["autoChecks"] = req["autoChecks"] or []
+            db.requests.append(req)
+        db.outbox = [{"id": r["id"], "t": r["t"], "to": r["to_addr"], "toRole": r["to_role"], "subject": r["subject"],
+                      "body": r["body"], "reqId": r["request_id"], "step": r["step"], "delivery": r["delivery"]}
+                     for r in c.execute("SELECT * FROM emails ORDER BY id")]
+        db.logs = [{"id": r["id"], "t": r["t"], "level": r["level"], "msg": r["msg"], "reqId": r["request_id"],
+                    "actor": r["actor"]} for r in c.execute("SELECT * FROM audit_logs ORDER BY id")]
+        db.archive = [{"code": r["code"], "reqId": r["request_id"], "mssv": r["mssv"], "hash": r["hash"],
+                       "signature": r["signature"], "keyId": r["key_id"], "signedAt": r["signed_at"],
+                       "transcript": json.loads(r["transcript_json"])}
+                      for r in c.execute("SELECT * FROM signed_transcripts ORDER BY signed_at")]
+        db.issuance = [{"t": r["t"], "reqId": r["request_id"], "mssv": r["mssv"], "hoTen": r["ho_ten"], "code": r["code"],
+                        "dienTu": True, "soBanGiay": r["so_ban_giay"], "mucDich": r["muc_dich"],
+                        "approvedBy": r["approved_by"], "leadTimeH": r["lead_time_h"]}
+                       for r in c.execute("SELECT * FROM issuance ORDER BY id")]
+        return db
+
+    # ------------------------------------------------------------------ ghi
+    def save(self, c: sqlite3.Connection, db: E.Db) -> None:
+        for t in ("issuance", "signed_transcripts", "request_history", "emails", "audit_logs", "requests", "grades",
+                  "students", "settings"):
+            c.execute(f"DELETE FROM {t}")
+        c.executemany("INSERT INTO settings(key, value) VALUES (?, ?)", [
+            ("config", _dumps(db.config)), ("seq", _dumps(db.seq)), ("clockOffset", _dumps(db.clock_offset)),
+            ("fault", _dumps(bool(db.fault))),
+        ])
+        c.executemany(f"INSERT INTO students({','.join(STUDENT_COLS)}) VALUES ({','.join('?' * len(STUDENT_COLS))})",
+                      [[s.get(v) for v in STUDENT_COLS.values()] for s in db.students])
+        c.executemany(f"INSERT INTO grades({','.join(GRADE_COLS)}) VALUES ({','.join('?' * len(GRADE_COLS))})",
+                      [[g.get(v) for v in GRADE_COLS.values()] for g in db.grades])
+        cols = ["id", "mssv", "status", "created_at", "updated_at", "attempts", "transcript_versions", "decision_note",
+                "approved_by", *REQ_JSON]
+        rows, hist = [], []
+        for r in db.requests:
+            rows.append([r["id"], r["form"]["mssv"], r["status"], r["createdAt"], r["updatedAt"], r["attempts"],
+                         r["transcriptVersions"], r.get("decisionNote"), r.get("approvedBy"),
+                         *[_dumps(r.get(k)) for k in REQ_JSON.values()]])
+            hist += [(r["id"], i, h["t"], h["step"], h["actor"], h["note"], h["kind"]) for i, h in enumerate(r["history"])]
+        c.executemany(f"INSERT INTO requests({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", rows)
+        c.executemany("INSERT INTO request_history(request_id, seq, t, step, actor, note, kind) VALUES (?,?,?,?,?,?,?)", hist)
+        c.executemany("INSERT INTO emails(id, t, to_addr, to_role, subject, body, request_id, step, delivery) VALUES (?,?,?,?,?,?,?,?,?)",
+                      [(m["id"], m["t"], m["to"], m["toRole"], m["subject"], m["body"], m["reqId"], m["step"], m.get("delivery"))
+                       for m in db.outbox])
+        c.executemany("INSERT INTO audit_logs(id, t, level, msg, request_id, actor) VALUES (?,?,?,?,?,?)",
+                      [(l["id"], l["t"], l["level"], l["msg"], l["reqId"], l.get("actor")) for l in db.logs])
+        c.executemany("INSERT INTO signed_transcripts(code, request_id, mssv, hash, signature, key_id, signed_at, transcript_json) VALUES (?,?,?,?,?,?,?,?)",
+                      [(a["code"], a["reqId"], a["mssv"], a["hash"], a["signature"], a.get("keyId"), a["signedAt"],
+                        _dumps(a["transcript"])) for a in db.archive])
+        c.executemany("INSERT INTO issuance(t, request_id, mssv, ho_ten, code, so_ban_giay, muc_dich, approved_by, lead_time_h) VALUES (?,?,?,?,?,?,?,?,?)",
+                      [(x["t"], x["reqId"], x["mssv"], x["hoTen"], x["code"], x["soBanGiay"], x["mucDich"], x["approvedBy"],
+                        x["leadTimeH"]) for x in db.issuance])
+
+    @contextmanager
+    def session(self, signer=None, on_email=None, write: bool = True):
+        """Nạp → xử lý → ghi trong một giao dịch. Lỗi giữa chừng thì không ghi gì."""
+        with _lock:
+            c = self.connect()
+            try:
+                db = self.load(c)
+                db.signer, db.on_email = signer, on_email
+                yield db
+                if write:
+                    c.execute("BEGIN")
+                    self.save(c, db)
+                    c.execute("COMMIT")
+            except Exception:
+                if c.in_transaction:
+                    c.execute("ROLLBACK")
+                raise
+            finally:
+                c.close()
+
+
+# ----------------------------------------------------------------- tài khoản
+def list_users(c: sqlite3.Connection) -> list[dict]:
+    return [dict(r) for r in c.execute("SELECT id, username, full_name, role, department, mssv, active FROM users ORDER BY role, username")]
+
+
+def get_user(c: sqlite3.Connection, user_id: int) -> dict | None:
+    r = c.execute("SELECT * FROM users WHERE id = ? AND active = 1", (user_id,)).fetchone()
+    return dict(r) if r else None
+
+
+def find_user(c: sqlite3.Connection, username: str) -> dict | None:
+    r = c.execute("SELECT * FROM users WHERE username = ? AND active = 1", (username.strip().lower(),)).fetchone()
+    return dict(r) if r else None
+
+
+def upsert_user(c: sqlite3.Connection, username: str, password_hash: str | None, full_name: str, role: str,
+                department: str | None = None, mssv: str | None = None) -> None:
+    username = username.strip().lower()
+    row = c.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
+    if row:
+        c.execute("UPDATE users SET full_name = ?, role = ?, department = ?, mssv = ?, active = 1 WHERE id = ?",
+                  (full_name, role, department, mssv, row["id"]))
+        if password_hash:
+            c.execute("UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, row["id"]))
+    else:
+        c.execute("INSERT INTO users(username, password_hash, full_name, role, department, mssv, created_at) VALUES (?,?,?,?,?,?,?)",
+                  (username, password_hash, full_name, role, department, mssv, int(time.time() * 1000)))
