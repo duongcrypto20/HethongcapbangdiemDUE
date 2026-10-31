@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hệ thống cấp phát bảng điểm</title>
+<link rel="icon" href="assets/logo-due.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700;800&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="wrap">
+    <div class="left">
+      <span>Đồ án học phần MIS3047 · Quản lý quy trình kinh doanh</span>
+      <span class="hide-sm">Dữ liệu hư cấu, phục vụ học tập</span>
+    </div>
+    <div class="right" id="topbar-right"></div>
+  </div>
+</div>
+<header class="masthead">
+  <div class="wrap">
+    <a class="brand" href="#home">
+      <img class="logo" src="assets/logo-due.png" alt="Logo Trường Đại học Kinh tế – ĐHĐN" width="54" height="70">
+      <div>
+        <div class="kicker">Phòng Đào tạo · Quy trình TO-BE</div>
+        <div class="name">Hệ thống cấp phát bảng điểm</div>
+        <div class="tagline">Xét duyệt và cấp phát bảng điểm trực tuyến cho sinh viên</div>
+      </div>
+    </a>
+    <form class="search" data-form="search" role="search" id="search-form">
+      <input id="q" name="q" placeholder="Nhập mã yêu cầu hoặc mã xác thực" aria-label="Tìm yêu cầu hoặc mã xác thực">
+      <button type="submit">Tìm</button>
+    </form>
+  </div>
+</header>
+<nav class="mainnav" aria-label="Điều hướng chính"><div class="wrap" id="nav"></div></nav>
+<div id="banner"></div>
+<main><div class="wrap" id="view"><div class="empty">Đang tải…</div></div></main>
+<footer>
+  <div class="wrap">
+    <div>
+      <h3>Về sản phẩm</h3>
+      <p style="margin:0">Ứng dụng web hỗ trợ quy trình "Xét duyệt và cấp phát bảng điểm (TO-BE)". Mỗi màn hình ứng với một làn và một nhiệm vụ trong mô hình BPMN.</p>
+    </div>
+    <div>
+      <h3>Vai trò</h3>
+      <ul>
+        <li>Sinh viên: gửi, bổ sung, hủy yêu cầu</li>
+        <li>Khoa: rà soát và hiệu chỉnh điểm</li>
+        <li>Phòng Đào tạo: kiểm tra, chỉnh sửa, in, giao</li>
+        <li>Phó phòng: phê duyệt, ký số, đóng dấu</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Công nghệ</h3>
+      <ul>
+        <li>Python Flask + SQLite</li>
+        <li>Ký số RSA-PSS SHA-256</li>
+        <li><a href="#tra-cuu">Tra cứu bảng điểm bằng mã xác thực</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="bottom"><div class="wrap"><span>Sản phẩm đồ án MIS3047, không phải hệ thống chính thức của nhà trường.</span><span>Giao diện phỏng theo tông màu trắng – xanh của cổng thông tin DUE.</span></div></div>
+</footer>
+<div id="drawer-host"></div>
+<div class="toast-host" id="toasts" aria-live="polite"></div>
+<script src="js/app.js"></script>
+</body>
+</html>
