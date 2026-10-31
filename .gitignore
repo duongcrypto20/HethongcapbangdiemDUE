@@ -1,0 +1,10 @@
+# Bí mật và dữ liệu chạy — KHÔNG đưa lên Git
+.env
+keys/
+data/*.db
+data/*.db-*
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
