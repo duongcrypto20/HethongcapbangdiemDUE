@@ -43,6 +43,12 @@ LOP = {"Hệ thống thông tin quản lý": "K21", "Quản trị kinh doanh": "
 
 # mssv, họ tên, ngày sinh, giới tính, ngành, năm nhập học, trạng thái, điểm TB kỳ vọng, số học kỳ, kịch bản
 STUDENTS = [
+    ("241121521209", "Ngô Quỳnh Dương", "2004-04-12", "Nữ", "Hệ thống thông tin quản lý", 2024, "Đang học", 8.1, 4, "Demo chính — tài khoản được dùng cho sinh viên chính"),
+    ("241121521229", "Võ Trương Gia Nghi", "2004-01-08", "Nữ", "Hệ thống thông tin quản lý", 2024, "Đang học", 7.8, 4, "Demo chính — tài khoản được dùng cho sinh viên chính"),
+    ("2421121521231", "Lê Thị Thanh Nhàn", "2004-07-19", "Nữ", "Hệ thống thông tin quản lý", 2024, "Đang học", 8.4, 4, "Demo chính — tài khoản được dùng cho sinh viên chính"),
+    ("241121521243", "Trần Tôn Phương Thảo", "2004-10-02", "Nữ", "Hệ thống thông tin quản lý", 2024, "Đang học", 8.0, 4, "Demo chính — tài khoản được dùng cho sinh viên chính"),
+    ("241121521230", "Đinh Thị Mỹ Ngọc", "2004-05-21", "Nữ", "Hệ thống thông tin quản lý", 2024, "Đang học", 7.9, 4, "Demo chính — tài khoản được dùng cho sinh viên chính"),
+    ("241121521220", "Võ Thị Lạc", "2004-02-14", "Nữ", "Hệ thống thông tin quản lý", 2024, "Đang học", 8.2, 4, "Demo chính — tài khoản được dùng cho sinh viên chính"),
     ("221121521101", "Trần Minh Anh", "2004-03-12", "Nữ", "Hệ thống thông tin quản lý", 2022, "Đang học", 8.1, 4, "Dữ liệu sạch — luồng chính, chỉ bản điện tử"),
     ("221121502102", "Lê Hoàng Bảo", "2004-07-25", "Nam", "Quản trị kinh doanh", 2022, "Đang học", 7.0, 4, "Có học lại 1 môn — đang chờ Phó phòng duyệt"),
     ("221121521103", "Phạm Gia Hân", "2004-01-08", "Nữ", "Hệ thống thông tin quản lý", 2022, "Đang học", 7.6, 4, "Thiếu điểm 1 học phần — chuyển Khoa"),

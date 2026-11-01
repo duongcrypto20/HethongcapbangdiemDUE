@@ -21,16 +21,16 @@ python app.py                   # mở http://127.0.0.1:5000
 
 Lần chạy đầu, hệ thống tự tạo CSDL `data/bangdiem.db` với dữ liệu mẫu và sinh cặp khóa ký số trong `keys/`.
 
-### Tài khoản demo (mật khẩu `123456`)
+### Tài khoản demo chính (mật khẩu `123456`)
 
 | Vai trò | Tên đăng nhập |
 |---|---|
-| Sinh viên | MSSV, ví dụ `221121521101` (Trần Minh Anh), `221121506109` (Trương Mỹ Duyên) |
+| Sinh viên | `241121521209` (Ngô Quỳnh Dương), `241121521229` (Võ Trương Gia Nghi), `2421121521231` (Lê Thị Thanh Nhàn), `241121521243` (Trần Tôn Phương Thảo), `241121521230` (Đinh Thị Mỹ Ngọc), `241121521220` (Võ Thị Lạc) |
 | Khoa | `khoa.thongketinhoc`, `khoa.quantrikinhdoanh`, `khoa.ketoan` |
 | Phòng Đào tạo | `pdt.hong` |
 | Phó phòng | `pp.lethi` |
 
-Trang đăng nhập liệt kê sẵn mọi tài khoản; bấm vào để đăng nhập nhanh.
+Trang đăng nhập liệt kê sẵn các tài khoản demo và kịch bản kiểm thử; bấm vào để đăng nhập nhanh.
 
 ## Kiểm thử tự động
 

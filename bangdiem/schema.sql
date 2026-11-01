@@ -1,5 +1,3 @@
--- Lược đồ CSDL SQLite của hệ thống cấp phát bảng điểm (TO-BE)
--- Khóa chính (PK), khóa ngoại (FK) và chỉ mục được khai báo tường minh.
 PRAGMA foreign_keys = ON;
 
 -- Tài khoản đăng nhập & phân quyền theo 4 làn BPMN

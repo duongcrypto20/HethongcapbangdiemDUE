@@ -1,9 +1,3 @@
-"""Danh mục phần tử BPMN to-be (đã sửa) và ánh xạ trạng thái yêu cầu.
-
-Mã phần tử (vd. ``ca_xt``, ``g_diem``) lấy đúng theo tệp
-``bpmn/BPMN_TO_BE_NHOM5_da_sua.bpmn``. Bộ máy quy trình ghi các mã này vào lịch sử
-của từng yêu cầu để giao diện tô sáng đúng vị trí trên sơ đồ.
-"""
 from __future__ import annotations
 
 import re
