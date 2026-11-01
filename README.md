@@ -71,6 +71,9 @@ Tiêu đề cột chấp nhận tiếng Việt có dấu; dấu phân cách ph�
 | Biến | Ý nghĩa |
 |---|---|
 | `SIGN_KEY_PASSPHRASE` | Passphrase mã hóa khóa bí mật ký số. **Đổi khi triển khai thật.** |
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | Kết nối Turso bền vững; để trống thì dùng SQLite local. |
+| `FLASK_SECRET_KEY` | Khóa ký cookie phiên; cần giữ ổn định trên Vercel. |
+| `SIGNING_PRIVATE_KEY_B64` | Khóa RSA riêng PEM đã mã hóa, Base64; cần giữ ổn định để chữ ký xác minh được giữa các instance. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | Gửi email thật (vd. Gmail `smtp.gmail.com:587` + mật khẩu ứng dụng). Để trống thì email chỉ lưu trong hộp thư hệ thống. |
 | `SMTP_REDIRECT_TO` | Khi demo, chuyển mọi email tới một địa chỉ của nhóm |
 | `DEMO_MODE` | `1`: hiện tài khoản demo và nút tua đồng hồ; `0`: tắt |
@@ -102,3 +105,5 @@ Nguyên tắc: **mọi thay đổi trạng thái đi qua `engine.py`**, mỗi h�
 - SSO là mô phỏng (đăng nhập bằng MSSV + mật khẩu), chưa kết nối máy chủ SSO thật của trường.
 - Ký số dùng cặp khóa RSA tự sinh, chưa phải chứng thư số do tổ chức được cấp phép phát hành; "đóng dấu đỏ" là thao tác xác nhận trên hệ thống.
 - SQLite và khóa ghi toàn cục phù hợp quy mô một trường; quy mô lớn hơn nên chuyển sang PostgreSQL.
+- Vercel cần cấu hình `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `FLASK_SECRET_KEY`, `SIGN_KEY_PASSPHRASE` và `SIGNING_PRIVATE_KEY_B64` trong Project Settings › Environment Variables. Tạo khóa RSA ổn định local rồi Base64 hóa `keys/signing_key.pem`; không đưa token hoặc khóa riêng vào Git.
+- Khóa ghi hiện chỉ tuần tự hóa yêu cầu trong cùng một process. Trước khi dùng nhiều người đồng thời trên serverless, cần bổ sung cơ chế chống ghi đè giữa các instance.

@@ -47,17 +47,34 @@ def _int_if_whole(v):
     return v
 
 
+def _turso_row_factory(cursor, row):
+    del cursor
+    return row
+
+
 class Store:
-    def __init__(self, path: str | Path):
+    def __init__(self, path: str | Path, database_url: str | None = None, auth_token: str | None = None):
+        if bool(database_url) != bool(auth_token):
+            raise ValueError("TURSO_DATABASE_URL and TURSO_AUTH_TOKEN must both be configured")
         self.path = str(path)
-        Path(self.path).parent.mkdir(parents=True, exist_ok=True)
+        self.database_url = database_url
+        self.auth_token = auth_token
+        if not self.database_url:
+            Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         c = self.connect()
         try:
             c.executescript(SCHEMA.read_text(encoding="utf-8"))
         finally:
             c.close()
 
-    def connect(self) -> sqlite3.Connection:
+    def connect(self):
+        if self.database_url:
+            import turso_serverless
+
+            c = turso_serverless.connect(self.database_url, auth_token=self.auth_token, isolation_level=None)
+            c.row_factory = _turso_row_factory
+            c.execute("PRAGMA foreign_keys = ON")
+            return c
         c = sqlite3.connect(self.path, timeout=30, isolation_level=None)  # tự quản lý giao dịch
         c.row_factory = sqlite3.Row
         c.execute("PRAGMA foreign_keys = ON")
@@ -118,17 +135,35 @@ class Store:
         return db
 
     # ------------------------------------------------------------------ ghi
+    def _executemany(self, c, sql: str, rows) -> None:
+        if not self.database_url:
+            c.executemany(sql, rows)
+            return
+        rows = list(rows)
+        if not rows:
+            return
+        prefix, values = sql.rsplit(" VALUES ", 1)
+        parameters_per_row = values.count("?")
+        if not parameters_per_row:
+            raise ValueError("Bulk insert SQL must contain positional parameters")
+        batch_size = max(1, 900 // parameters_per_row)
+        for start in range(0, len(rows), batch_size):
+            batch = rows[start:start + batch_size]
+            placeholders = ",".join(values for _ in batch)
+            parameters = [value for row in batch for value in row]
+            c.execute(f"{prefix} VALUES {placeholders}", parameters)
+
     def save(self, c: sqlite3.Connection, db: E.Db) -> None:
         for t in ("issuance", "signed_transcripts", "request_history", "emails", "audit_logs", "requests", "grades",
                   "students", "settings"):
             c.execute(f"DELETE FROM {t}")
-        c.executemany("INSERT INTO settings(key, value) VALUES (?, ?)", [
+        self._executemany(c, "INSERT INTO settings(key, value) VALUES (?, ?)", [
             ("config", _dumps(db.config)), ("seq", _dumps(db.seq)), ("clockOffset", _dumps(db.clock_offset)),
             ("fault", _dumps(bool(db.fault))),
         ])
-        c.executemany(f"INSERT INTO students({','.join(STUDENT_COLS)}) VALUES ({','.join('?' * len(STUDENT_COLS))})",
+        self._executemany(c, f"INSERT INTO students({','.join(STUDENT_COLS)}) VALUES ({','.join('?' * len(STUDENT_COLS))})",
                       [[s.get(v) for v in STUDENT_COLS.values()] for s in db.students])
-        c.executemany(f"INSERT INTO grades({','.join(GRADE_COLS)}) VALUES ({','.join('?' * len(GRADE_COLS))})",
+        self._executemany(c, f"INSERT INTO grades({','.join(GRADE_COLS)}) VALUES ({','.join('?' * len(GRADE_COLS))})",
                       [[g.get(v) for v in GRADE_COLS.values()] for g in db.grades])
         cols = ["id", "mssv", "status", "created_at", "updated_at", "attempts", "transcript_versions", "decision_note",
                 "approved_by", *REQ_JSON]
@@ -138,17 +173,17 @@ class Store:
                          r["transcriptVersions"], r.get("decisionNote"), r.get("approvedBy"),
                          *[_dumps(r.get(k)) for k in REQ_JSON.values()]])
             hist += [(r["id"], i, h["t"], h["step"], h["actor"], h["note"], h["kind"]) for i, h in enumerate(r["history"])]
-        c.executemany(f"INSERT INTO requests({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", rows)
-        c.executemany("INSERT INTO request_history(request_id, seq, t, step, actor, note, kind) VALUES (?,?,?,?,?,?,?)", hist)
-        c.executemany("INSERT INTO emails(id, t, to_addr, to_role, subject, body, request_id, step, delivery) VALUES (?,?,?,?,?,?,?,?,?)",
+        self._executemany(c, f"INSERT INTO requests({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", rows)
+        self._executemany(c, "INSERT INTO request_history(request_id, seq, t, step, actor, note, kind) VALUES (?,?,?,?,?,?,?)", hist)
+        self._executemany(c, "INSERT INTO emails(id, t, to_addr, to_role, subject, body, request_id, step, delivery) VALUES (?,?,?,?,?,?,?,?,?)",
                       [(m["id"], m["t"], m["to"], m["toRole"], m["subject"], m["body"], m["reqId"], m["step"], m.get("delivery"))
                        for m in db.outbox])
-        c.executemany("INSERT INTO audit_logs(id, t, level, msg, request_id, actor) VALUES (?,?,?,?,?,?)",
+        self._executemany(c, "INSERT INTO audit_logs(id, t, level, msg, request_id, actor) VALUES (?,?,?,?,?,?)",
                       [(l["id"], l["t"], l["level"], l["msg"], l["reqId"], l.get("actor")) for l in db.logs])
-        c.executemany("INSERT INTO signed_transcripts(code, request_id, mssv, hash, signature, key_id, signed_at, transcript_json) VALUES (?,?,?,?,?,?,?,?)",
+        self._executemany(c, "INSERT INTO signed_transcripts(code, request_id, mssv, hash, signature, key_id, signed_at, transcript_json) VALUES (?,?,?,?,?,?,?,?)",
                       [(a["code"], a["reqId"], a["mssv"], a["hash"], a["signature"], a.get("keyId"), a["signedAt"],
                         _dumps(a["transcript"])) for a in db.archive])
-        c.executemany("INSERT INTO issuance(t, request_id, mssv, ho_ten, code, so_ban_giay, muc_dich, approved_by, lead_time_h) VALUES (?,?,?,?,?,?,?,?,?)",
+        self._executemany(c, "INSERT INTO issuance(t, request_id, mssv, ho_ten, code, so_ban_giay, muc_dich, approved_by, lead_time_h) VALUES (?,?,?,?,?,?,?,?,?)",
                       [(x["t"], x["reqId"], x["mssv"], x["hoTen"], x["code"], x["soBanGiay"], x["mucDich"], x["approvedBy"],
                         x["leadTimeH"]) for x in db.issuance])
 

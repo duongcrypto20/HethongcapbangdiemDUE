@@ -61,9 +61,16 @@ def khoa_username(dept: str) -> str:
 def create_app(test_config: dict | None = None) -> Flask:
     _load_env_file()
     app = Flask(__name__, static_folder=None)
+    on_vercel = os.environ.get("VERCEL") == "1"
+    if on_vercel:
+        required = ("TURSO_DATABASE_URL", "TURSO_AUTH_TOKEN", "FLASK_SECRET_KEY",
+                    "SIGN_KEY_PASSPHRASE", "SIGNING_PRIVATE_KEY_B64")
+        missing = [name for name in required if not os.environ.get(name)]
+        if missing:
+            raise RuntimeError(f"Vercel environment is missing required settings: {', '.join(missing)}")
     cfg = {
-        "DATA_DIR": os.environ.get("DATA_DIR", str(ROOT / "data")),
-        "KEY_DIR": os.environ.get("KEY_DIR", str(ROOT / "keys")),
+        "DATA_DIR": os.environ.get("DATA_DIR", "/tmp/bangdiem-data" if on_vercel else str(ROOT / "data")),
+        "KEY_DIR": os.environ.get("KEY_DIR", "/tmp/bangdiem-keys" if on_vercel else str(ROOT / "keys")),
         "DEMO_MODE": os.environ.get("DEMO_MODE", "1") != "0",
         "DEMO_PASSWORD": os.environ.get("DEMO_PASSWORD", "123456"),
         "SEED_SAMPLE": True,
@@ -85,8 +92,12 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.json.ensure_ascii = False
     app.json.sort_keys = False
 
-    store = ST.Store(os.environ.get("DB_PATH", str(Path(cfg["DATA_DIR"]) / "bangdiem.db"))
-                     if not test_config or "DB_PATH" not in test_config else test_config["DB_PATH"])
+    store = ST.Store(
+        os.environ.get("DB_PATH", str(Path(cfg["DATA_DIR"]) / "bangdiem.db"))
+        if not test_config or "DB_PATH" not in test_config else test_config["DB_PATH"],
+        database_url=os.environ.get("TURSO_DATABASE_URL"),
+        auth_token=os.environ.get("TURSO_AUTH_TOKEN"),
+    )
     signer = Signer(cfg["KEY_DIR"])
     mailer = Mailer()
     flows = bpmn.parse_flows(ROOT / "bpmn" / "BPMN_TO_BE_NHOM5_da_sua.bpmn")

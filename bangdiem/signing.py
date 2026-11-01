@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import os
 from pathlib import Path
@@ -35,6 +36,13 @@ class Signer:
         self.key_id = hashlib.sha256(der).hexdigest()[:16].upper()
 
     def _load_or_create(self):
+        key_b64 = os.environ.get("SIGNING_PRIVATE_KEY_B64")
+        if key_b64:
+            try:
+                pem = base64.b64decode(key_b64, validate=True)
+                return serialization.load_pem_private_key(pem, password=self.passphrase)
+            except (binascii.Error, ValueError, TypeError) as exc:
+                raise ValueError("SIGNING_PRIVATE_KEY_B64 is invalid or does not match SIGN_KEY_PASSPHRASE") from exc
         if self.key_path.exists():
             return serialization.load_pem_private_key(self.key_path.read_bytes(), password=self.passphrase)
         self.key_dir.mkdir(parents=True, exist_ok=True)
