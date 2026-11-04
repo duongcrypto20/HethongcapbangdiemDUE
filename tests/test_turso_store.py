@@ -1,4 +1,5 @@
 import base64
+import importlib.util
 import os
 import tempfile
 import unittest
@@ -55,6 +56,20 @@ class TursoStoreTest(unittest.TestCase):
         with patch("app._load_env_file"), patch.dict(os.environ, {"VERCEL": "1"}, clear=True):
             with self.assertRaisesRegex(RuntimeError, "TURSO_DATABASE_URL"):
                 create_app()
+
+    def test_vercel_entrypoint_exports_created_flask_app(self):
+        entrypoint = Path(__file__).resolve().parents[1] / "api" / "index.py"
+        spec = importlib.util.spec_from_file_location("vercel_entrypoint", entrypoint)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        application = object()
+
+        with patch("app.create_app", return_value=application) as create:
+            spec.loader.exec_module(module)
+
+        create.assert_called_once_with()
+        self.assertIs(module.app, application)
 
     def test_signing_key_can_be_loaded_from_stable_environment_value(self):
         with tempfile.TemporaryDirectory() as tmp:

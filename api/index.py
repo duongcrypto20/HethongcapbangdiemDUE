@@ -1,5 +1,3 @@
-from app import app
+from app import create_app
 
-# Vercel đòi hỏi file entry point xuất ra đối tượng app
-if __name__ == '__main__':
-    app.run()
+app = create_app()
