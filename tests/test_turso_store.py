@@ -43,7 +43,7 @@ class TursoStoreTest(unittest.TestCase):
             ["BEGIN IMMEDIATE", "LOAD", "PROCESS", "SAVE", "COMMIT", "CLOSE"],
         )
 
-    def test_read_only_session_does_not_save_snapshot(self):
+    def test_read_only_session_does_not_open_a_write_transaction(self):
         events = []
 
         class Connection:
@@ -68,7 +68,7 @@ class TursoStoreTest(unittest.TestCase):
         with store.session(write=False):
             events.append("PROCESS")
 
-        self.assertEqual(events, ["BEGIN", "LOAD", "PROCESS", "ROLLBACK", "CLOSE"])
+        self.assertEqual(events, ["LOAD", "PROCESS", "CLOSE"])
 
     def test_requires_url_and_token_together(self):
         with tempfile.TemporaryDirectory() as tmp:

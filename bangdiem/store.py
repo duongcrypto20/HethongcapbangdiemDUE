@@ -191,7 +191,8 @@ class Store:
         with _lock:
             c = self.connect()
             try:
-                c.execute("BEGIN IMMEDIATE" if write else "BEGIN")
+                if write:
+                    c.execute("BEGIN IMMEDIATE")
                 db = self.load(c)
                 db.store_connection = c
                 db.signer, db.on_email = signer, on_email
@@ -199,8 +200,6 @@ class Store:
                 if write:
                     self.save(c, db)
                     c.execute("COMMIT")
-                else:
-                    c.execute("ROLLBACK")
             except Exception:
                 if c.in_transaction:
                     c.execute("ROLLBACK")
