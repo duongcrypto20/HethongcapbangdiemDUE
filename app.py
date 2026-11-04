@@ -173,8 +173,17 @@ def create_app(test_config: dict | None = None) -> Flask:
     if store.is_empty() and cfg["SEED_SAMPLE"]:
         reset_data("sample")
     else:
-        with store.session(None, None, write=False) as db:
-            sync_accounts(db)
+        c = store.connect()
+        try:
+            missing_accounts = c.execute("SELECT 1 FROM users LIMIT 1").fetchone() is None
+            missing_demo_migration = cfg["DEMO_MODE"] and c.execute(
+                "SELECT 1 FROM app_meta WHERE key = ?", ("demo_credentials_v2",)
+            ).fetchone() is None
+        finally:
+            c.close()
+        if missing_accounts or missing_demo_migration:
+            with store.session(signer, None) as db:
+                sync_accounts(db, db.store_connection)
 
     # ------------------------------------------------------------ tiện ích
     def current_user() -> dict | None:
