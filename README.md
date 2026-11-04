@@ -1,6 +1,6 @@
 # Hệ thống cấp phát bảng điểm (TO-BE) — bản Python
 
-Ứng dụng web hỗ trợ quy trình **"Xét duyệt và cấp phát bảng điểm (TO-BE)"** theo mô hình BPMN đã sửa của nhóm (`bpmn/BPMN_TO_BE_NHOM5_da_sua.bpmn`). Backend Python (Flask + SQLite), frontend HTML/CSS/JS, giao diện tông trắng – xanh theo cổng thông tin DUE.
+Ứng dụng web hỗ trợ quy trình **"Xét duyệt và cấp phát bảng điểm (TO-BE)"** theo mô hình BPMN đã sửa của nhóm (`bpmn/BPMN_TO_BE_NHOM5_da_sua.bpmn`). Backend Python (Flask + SQLite local hoặc Turso trực tuyến), frontend HTML/CSS/JS, giao diện tông trắng – xanh theo cổng thông tin DUE.
 
 > Dữ liệu mẫu là hư cấu. Bảng điểm sinh ra luôn có dấu chìm "BẢN DEMO – KHÔNG CÓ GIÁ TRỊ PHÁP LÝ".
 
@@ -87,7 +87,7 @@ Tiêu đề cột chấp nhận tiếng Việt có dấu; dấu phân cách ph�
 app.py                    Flask: REST API, xác thực, phân quyền theo làn, phục vụ giao diện
 bangdiem/bpmn.py          Danh mục phần tử BPMN, trạng thái ↔ vị trí token, đọc sequenceFlow
 bangdiem/engine.py        Bộ máy quy trình: luật X1–X8, D0–D7, cổng XOR, timer, GPA, hủy, lỗi truy xuất
-bangdiem/store.py         Lưu trữ SQLite (giao dịch), tài khoản
+bangdiem/store.py         Lưu trữ SQLite/Turso (giao dịch), tài khoản
 bangdiem/schema.sql       Lược đồ CSDL
 bangdiem/signing.py       Ký số RSA-PSS, quản lý khóa
 bangdiem/mailer.py        Email: hộp thư + SMTP
@@ -108,4 +108,4 @@ Nguyên tắc: **mọi thay đổi trạng thái đi qua `engine.py`**, mỗi h�
 - Ký số dùng cặp khóa RSA tự sinh, chưa phải chứng thư số do tổ chức được cấp phép phát hành; "đóng dấu đỏ" là thao tác xác nhận trên hệ thống.
 - SQLite và khóa ghi toàn cục phù hợp quy mô một trường; quy mô lớn hơn nên chuyển sang PostgreSQL.
 - Vercel cần cấu hình `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `FLASK_SECRET_KEY`, `SIGN_KEY_PASSPHRASE` và `SIGNING_PRIVATE_KEY_B64` trong Project Settings › Environment Variables. Tạo khóa RSA ổn định local rồi Base64 hóa `keys/signing_key.pem`; không đưa token hoặc khóa riêng vào Git.
-- Khóa ghi hiện chỉ tuần tự hóa yêu cầu trong cùng một process. Trước khi dùng nhiều người đồng thời trên serverless, cần bổ sung cơ chế chống ghi đè giữa các instance.
+- Mỗi thao tác ghi lấy khóa giao dịch ở cơ sở dữ liệu trước khi đọc snapshot; thao tác chỉ đọc không ghi lại toàn bộ dữ liệu. Điều này ngăn các instance Vercel ghi đè snapshot của nhau. Với tải ghi lớn hơn, nên chuyển sang PostgreSQL.

@@ -13,6 +13,63 @@ from turso_serverless.dbapi import Row
 
 
 class TursoStoreTest(unittest.TestCase):
+    def test_write_session_locks_before_loading_snapshot(self):
+        events = []
+
+        class Connection:
+            in_transaction = False
+
+            def execute(self, sql):
+                events.append(sql)
+                if sql.startswith("BEGIN"):
+                    self.in_transaction = True
+                elif sql in ("COMMIT", "ROLLBACK"):
+                    self.in_transaction = False
+
+            def close(self):
+                events.append("CLOSE")
+
+        connection = Connection()
+        store = Store.__new__(Store)
+        store.connect = lambda: connection
+        store.load = lambda _connection: events.append("LOAD") or Mock()
+        store.save = lambda _connection, _db: events.append("SAVE")
+
+        with store.session():
+            events.append("PROCESS")
+
+        self.assertEqual(
+            events,
+            ["BEGIN IMMEDIATE", "LOAD", "PROCESS", "SAVE", "COMMIT", "CLOSE"],
+        )
+
+    def test_read_only_session_does_not_save_snapshot(self):
+        events = []
+
+        class Connection:
+            in_transaction = False
+
+            def execute(self, sql):
+                events.append(sql)
+                if sql.startswith("BEGIN"):
+                    self.in_transaction = True
+                elif sql in ("COMMIT", "ROLLBACK"):
+                    self.in_transaction = False
+
+            def close(self):
+                events.append("CLOSE")
+
+        connection = Connection()
+        store = Store.__new__(Store)
+        store.connect = lambda: connection
+        store.load = lambda _connection: events.append("LOAD") or Mock()
+        store.save = lambda _connection, _db: events.append("SAVE")
+
+        with store.session(write=False):
+            events.append("PROCESS")
+
+        self.assertEqual(events, ["BEGIN", "LOAD", "PROCESS", "ROLLBACK", "CLOSE"])
+
     def test_requires_url_and_token_together(self):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaisesRegex(ValueError, "must both be configured"):

@@ -1,10 +1,7 @@
-"""Lưu trữ bền vững trong SQLite.
+"""Lưu trữ bền vững trong SQLite hoặc Turso.
 
-Mỗi lời gọi API mở một phiên: nạp trạng thái từ SQLite thành đối tượng ``engine.Db``,
-cho bộ máy quy trình xử lý, rồi ghi lại trong **một giao dịch** (all-or-nothing).
-Một khóa toàn cục tuần tự hóa các phiên ghi để hai người thao tác cùng lúc không đè dữ liệu
-của nhau. Quy mô một trường (vài nghìn yêu cầu/năm) phù hợp với cách làm này; khi cần mở rộng,
-thay lớp này bằng PostgreSQL + ORM mà không phải sửa ``engine.py``.
+Mỗi phiên nạp trạng thái và ghi thay đổi trong một giao dịch. Giao dịch ghi lấy khóa
+cơ sở dữ liệu trước khi đọc để các Vercel instance không cùng sửa một snapshot cũ.
 """
 from __future__ import annotations
 
@@ -190,17 +187,20 @@ class Store:
 
     @contextmanager
     def session(self, signer=None, on_email=None, write: bool = True):
-        """Nạp → xử lý → ghi trong một giao dịch. Lỗi giữa chừng thì không ghi gì."""
+        """Nạp và xử lý một snapshot; tuần tự hóa writers bằng khóa của cơ sở dữ liệu."""
         with _lock:
             c = self.connect()
             try:
+                c.execute("BEGIN IMMEDIATE" if write else "BEGIN")
                 db = self.load(c)
+                db.store_connection = c
                 db.signer, db.on_email = signer, on_email
                 yield db
                 if write:
-                    c.execute("BEGIN")
                     self.save(c, db)
                     c.execute("COMMIT")
+                else:
+                    c.execute("ROLLBACK")
             except Exception:
                 if c.in_transaction:
                     c.execute("ROLLBACK")

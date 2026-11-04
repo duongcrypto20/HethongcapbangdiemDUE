@@ -555,7 +555,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             mode = "replace" if d.get("mode") == "replace" else "merge"
             res = E.import_students(db, rows, mode) if kind == "students" else E.import_grades(db, rows, mode)
             if kind == "students":
-                sync_accounts(db)
+                sync_accounts(db, db.store_connection)
             return {"result": res}
         return run(f)
 

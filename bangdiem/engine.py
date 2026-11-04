@@ -78,6 +78,7 @@ class Db:
         # Không lưu: dịch vụ ngoài được gắn khi chạy
         self.signer = None  # bangdiem.signing.Signer
         self.on_email: Callable[[dict], None] | None = None
+        self.store_connection = None
 
 
 # ---------------------------------------------------------------------------
