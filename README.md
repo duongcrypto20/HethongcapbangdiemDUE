@@ -78,7 +78,7 @@ Tiêu đề cột chấp nhận tiếng Việt có dấu; dấu phân cách ph�
 | `SIGNING_PRIVATE_KEY_B64` | Khóa RSA riêng PEM đã mã hóa, Base64; cần giữ ổn định để chữ ký xác minh được giữa các instance. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | Gửi email thật (vd. Gmail `smtp.gmail.com:587` + mật khẩu ứng dụng). Để trống thì email chỉ lưu trong hộp thư hệ thống. |
 | `SMTP_REDIRECT_TO` | Khi demo, chuyển mọi email tới một địa chỉ của nhóm |
-| `DEMO_MODE` | `1`: hiện tài khoản demo và nút tua đồng hồ; `0`: tắt |
+| `DEMO_MODE` | `1`: hiện tài khoản demo và nút tua đồng hồ; sinh viên dùng MSSV làm mật khẩu, cán bộ dùng `DEMO_PASSWORD`. `0`: ẩn tài khoản demo và tắt nút tua đồng hồ. Chỉ bật với dữ liệu mẫu. |
 | `COOKIE_SECURE` | `1` khi chạy sau HTTPS |
 
 ## Cấu trúc mã nguồn
