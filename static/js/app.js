@@ -13,6 +13,8 @@
     me: null, csrf: null, demo: null, demoMode: true,
     cat: null, svg: null, state: null, detail: null,
   };
+  const pendingActions = new Set();
+  let pollConnectionLost = false;
   const ui = {
     route: 'home', tab: {}, open: null, dtab: 'overview', zoom: 0.42, pzoom: 0.42, highlight: null,
     verify: '', verifyResult: null, tests: null, confirm: null, filter: '', statusFilter: '',
@@ -75,6 +77,12 @@
   }
   /** Gọi một thao tác nghiệp vụ, nạp lại dữ liệu và vẽ lại. */
   async function act(method, url, data, okMsg) {
+    const key = `${method}:${url}`;
+    if (pendingActions.has(key)) {
+      toast('Thao tác đang được xử lý. Vui lòng chờ.', 'info');
+      return null;
+    }
+    pendingActions.add(key);
     try {
       const r = await api(method, url, data);
       await loadState();
@@ -87,6 +95,8 @@
     } catch (e) {
       toast(e.message, 'err');
       return null;
+    } finally {
+      pendingActions.delete(key);
     }
   }
   function confirmOnce(key, fn) {
@@ -947,7 +957,11 @@
       await loadState();
       const after = JSON.stringify(app.state.requests.map((r) => [r.id, r.status, r.history.length]));
       if (before !== after) { await loadDetail(); render(); toast('Dữ liệu vừa được cập nhật', 'ok'); } else renderChrome();
-    } catch (e) { /* mạng chập chờn: thử lại lần sau */ }
+      if (pollConnectionLost) { toast('Kết nối đã được khôi phục', 'ok'); pollConnectionLost = false; }
+    } catch (e) {
+      if (!pollConnectionLost) toast(`Không thể làm mới dữ liệu: ${e.message}`, 'err');
+      pollConnectionLost = true;
+    }
   }, 30000);
   boot();
 })();
