@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
     active        INTEGER NOT NULL DEFAULT 1,
     created_at    INTEGER NOT NULL
 );
+CREATE INDEX IF NOT EXISTS ix_users_full_name ON users(full_name);
 
 -- CSDL sinh viên (data store "CSDL sinh viên" trong BPMN)
 CREATE TABLE IF NOT EXISTS students (

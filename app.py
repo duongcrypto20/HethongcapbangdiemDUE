@@ -173,7 +173,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     if store.is_empty() and cfg["SEED_SAMPLE"]:
         reset_data("sample")
     else:
-        c = store.connect()
+        c = store.connect(foreign_keys=False)
         try:
             missing_accounts = c.execute("SELECT 1 FROM users LIMIT 1").fetchone() is None
             missing_demo_migration = cfg["DEMO_MODE"] and c.execute(
@@ -190,7 +190,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         uid = session.get("uid")
         if not uid:
             return None
-        c = store.connect()
+        c = store.connect(foreign_keys=False)
         try:
             return ST.get_user(c, uid)
         finally:
@@ -296,7 +296,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         fails = [t for t in login_fail.get(login_key, []) if now_s - t < 300]
         if len(fails) >= 5:
             return api_error("Sai mật khẩu quá 5 lần, hãy thử lại sau 5 phút", 429)
-        c = store.connect()
+        c = store.connect(foreign_keys=False)
         try:
             u = ST.find_user(c, username)
         finally:
@@ -308,7 +308,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         session.clear()
         session["uid"] = u["id"]
         session["csrf"] = secrets.token_urlsafe(24)
-        return me()
+        return user_response(u)
 
     @app.post("/api/logout")
     def logout():
@@ -321,7 +321,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         if not u:
             demo = None
             if cfg["DEMO_MODE"]:
-                c = store.connect()
+                c = store.connect(foreign_keys=False)
                 try:
                     demo = {"password": cfg["DEMO_PASSWORD"], "accounts": [
                         {
@@ -333,6 +333,9 @@ def create_app(test_config: dict | None = None) -> Flask:
                 finally:
                     c.close()
             return jsonify({"user": None, "demo": demo})
+        return user_response(u)
+
+    def user_response(u: dict):
         return jsonify({"user": {k: u[k] for k in ("id", "username", "full_name", "role", "department", "mssv")},
                         "csrf": session.get("csrf"), "demoMode": cfg["DEMO_MODE"]})
 

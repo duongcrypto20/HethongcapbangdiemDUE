@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -39,6 +40,15 @@ class ApiTest(unittest.TestCase):
         c = self.app.test_client()
         self.assertEqual(c.post("/api/login", json={"username": "pdt.hong", "password": "sai"}).status_code, 401)
         self.assertEqual(c.get("/api/state").status_code, 401)
+
+    def test_login_returns_user_without_second_database_lookup(self):
+        c = self.app.test_client()
+        with patch("bangdiem.store.get_user", side_effect=AssertionError("unexpected follow-up lookup")):
+            response = c.post("/api/login", json={"username": "pdt.hong", "password": "123456"})
+
+        self.assertEqual(response.status_code, 200, response.get_json())
+        self.assertEqual(response.get_json()["user"]["username"], "pdt.hong")
+        self.assertTrue(response.get_json()["csrf"])
 
     def test_sinh_vien_dang_nhap_bang_ho_ten_va_mssv(self):
         demo_app = create_app({**self.cfg, "DEMO_MODE": True, "DEMO_PASSWORD": "ignored-in-demo-mode"})

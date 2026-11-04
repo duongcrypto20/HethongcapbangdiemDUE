@@ -837,14 +837,29 @@
     render();
   }
   async function doLogin(username, password) {
+    const button = $('#view form[data-form="login"] button[type="submit"]');
+    if (button) { button.disabled = true; button.textContent = 'Đang đăng nhập…'; }
+    let response;
     try {
-      const r = await api('POST', '/api/login', { username, password });
-      app.me = r.user; app.csrf = r.csrf; app.demoMode = r.demoMode;
-      ui.tab = {};
+      response = await api('POST', '/api/login', { username, password });
+    } catch (e) {
+      toast(e.message, 'err');
+      if (button) { button.disabled = false; button.textContent = 'Đăng nhập'; }
+      return;
+    }
+
+    app.me = response.user; app.csrf = response.csrf; app.demoMode = response.demoMode;
+    app.state = null;
+    ui.tab = {};
+    if (location.hash !== '#home') location.hash = 'home';
+    render();
+    toast('Đã đăng nhập, đang tải dữ liệu…');
+    try {
       await loadState();
-      toast('Xin chào ' + r.user.full_name, 'ok');
-      if (location.hash !== '#home') location.hash = 'home'; else render();
-    } catch (e) { toast(e.message, 'err'); }
+      render();
+    } catch (e) {
+      toast(`Đã đăng nhập nhưng chưa tải được dữ liệu: ${e.message}`, 'err');
+    }
   }
   const FORMS = {
     login(fd) { doLogin(String(fd.get('username') || ''), String(fd.get('password') || '')); },

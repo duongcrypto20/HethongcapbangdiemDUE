@@ -65,22 +65,24 @@ class Store:
         finally:
             c.close()
 
-    def connect(self):
+    def connect(self, *, foreign_keys: bool = True):
         if self.database_url:
             import turso_serverless
 
             c = turso_serverless.connect(self.database_url, auth_token=self.auth_token, isolation_level=None)
             c.row_factory = _turso_row_factory
-            c.execute("PRAGMA foreign_keys = ON")
+            if foreign_keys:
+                c.execute("PRAGMA foreign_keys = ON")
             return c
         c = sqlite3.connect(self.path, timeout=30, isolation_level=None)  # tự quản lý giao dịch
         c.row_factory = sqlite3.Row
-        c.execute("PRAGMA foreign_keys = ON")
+        if foreign_keys:
+            c.execute("PRAGMA foreign_keys = ON")
         c.execute("PRAGMA journal_mode = WAL")
         return c
 
     def is_empty(self) -> bool:
-        c = self.connect()
+        c = self.connect(foreign_keys=False)
         try:
             return c.execute("SELECT COUNT(*) FROM settings").fetchone()[0] == 0
         finally:
@@ -189,7 +191,7 @@ class Store:
     def session(self, signer=None, on_email=None, write: bool = True):
         """Nạp và xử lý một snapshot; tuần tự hóa writers bằng khóa của cơ sở dữ liệu."""
         with _lock:
-            c = self.connect()
+            c = self.connect(foreign_keys=write)
             try:
                 if write:
                     c.execute("BEGIN IMMEDIATE")
@@ -220,14 +222,24 @@ def get_user(c: sqlite3.Connection, user_id: int) -> dict | None:
 
 def find_user(c: sqlite3.Connection, username: str) -> dict | None:
     username = username.strip()
-    r = c.execute("SELECT * FROM users WHERE username = ? AND active = 1", (username.lower(),)).fetchone()
-    if r:
-        return dict(r)
-
     normalize = lambda value: " ".join(unicodedata.normalize("NFKC", value).casefold().split())
     normalized_name = normalize(username)
     if not normalized_name:
         return None
+
+    username_key = username.lower()
+    exact_matches = c.execute(
+        "SELECT * FROM users WHERE active = 1 AND "
+        "(username = ? OR (role = 'SV' AND full_name = ?)) "
+        "ORDER BY CASE WHEN username = ? THEN 0 ELSE 1 END LIMIT 2",
+        (username_key, username, username_key),
+    ).fetchall()
+    username_match = next((row for row in exact_matches if row["username"] == username_key), None)
+    if username_match:
+        return dict(username_match)
+    if len(exact_matches) == 1:
+        return dict(exact_matches[0])
+
     matches = [
         row for row in c.execute("SELECT * FROM users WHERE role = 'SV' AND active = 1")
         if normalize(row["full_name"]) == normalized_name

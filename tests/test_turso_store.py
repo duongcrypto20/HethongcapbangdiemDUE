@@ -31,7 +31,7 @@ class TursoStoreTest(unittest.TestCase):
 
         connection = Connection()
         store = Store.__new__(Store)
-        store.connect = lambda: connection
+        store.connect = lambda **_kwargs: connection
         store.load = lambda _connection: events.append("LOAD") or Mock()
         store.save = lambda _connection, _db: events.append("SAVE")
 
@@ -61,7 +61,7 @@ class TursoStoreTest(unittest.TestCase):
 
         connection = Connection()
         store = Store.__new__(Store)
-        store.connect = lambda: connection
+        store.connect = lambda **_kwargs: connection
         store.load = lambda _connection: events.append("LOAD") or Mock()
         store.save = lambda _connection, _db: events.append("SAVE")
 
@@ -108,6 +108,20 @@ class TursoStoreTest(unittest.TestCase):
         self.assertFalse(any("journal_mode" in statement for statement in statements))
         connection.executescript.assert_called_once()
         connection.close.assert_called_once()
+
+    def test_remote_read_connection_skips_foreign_key_roundtrip(self):
+        connection = Mock()
+        store = Store.__new__(Store)
+        store.database_url = "https://db.turso.io"
+        store.auth_token = "test-token"
+
+        with patch("turso_serverless.connect", return_value=connection) as connect:
+            store.connect(foreign_keys=False)
+
+        connect.assert_called_once_with(
+            "https://db.turso.io", auth_token="test-token", isolation_level=None
+        )
+        connection.execute.assert_not_called()
 
     def test_vercel_requires_durable_storage_and_stable_secrets(self):
         with patch("app._load_env_file"), patch.dict(os.environ, {"VERCEL": "1"}, clear=True):
