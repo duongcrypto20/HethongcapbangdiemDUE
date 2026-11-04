@@ -111,18 +111,42 @@ def create_app(test_config: dict | None = None) -> Flask:
         try:
             pw = generate_password_hash(cfg["DEMO_PASSWORD"])
             existing = {u["username"] for u in ST.list_users(c)}
+            sync_demo_passwords = cfg["DEMO_MODE"] and not c.execute(
+                "SELECT 1 FROM app_meta WHERE key = ?", ("demo_passwords_v1",)
+            ).fetchone()
+            demo_password_hashes = {}
             for username, name, role, dept in STAFF:
-                ST.upsert_user(c, username, pw if cfg["DEMO_MODE"] or username not in existing else None,
-                               name, role, dept)
+                ST.upsert_user(c, username, pw if username not in existing else None, name, role, dept)
+                if sync_demo_passwords and username in existing:
+                    demo_password_hashes[username] = pw
             for dept in sorted({s["khoa"] for s in db.students if s["khoa"]}):
                 u = khoa_username(dept)
-                ST.upsert_user(c, u, pw if cfg["DEMO_MODE"] or u not in existing else None,
-                               f"Văn phòng {dept}", "KHOA", dept)
+                ST.upsert_user(c, u, pw if u not in existing else None, f"Văn phòng {dept}", "KHOA", dept)
+                if sync_demo_passwords and u in existing:
+                    demo_password_hashes[u] = pw
             for s in db.students:
-                student_pw = generate_password_hash(s["mssv"]) if cfg["DEMO_MODE"] else pw
-                ST.upsert_user(c, s["mssv"],
-                               student_pw if cfg["DEMO_MODE"] or s["mssv"] not in existing else None,
-                               s["hoTen"], "SV", None, s["mssv"])
+                username = s["mssv"]
+                student_pw = None
+                if username not in existing:
+                    student_pw = generate_password_hash(username) if cfg["DEMO_MODE"] else pw
+                elif sync_demo_passwords:
+                    demo_password_hashes[username] = generate_password_hash(username)
+                ST.upsert_user(c, username, student_pw, s["hoTen"], "SV", None, username)
+            if sync_demo_passwords:
+                entries = list(demo_password_hashes.items())
+                if entries:
+                    for start in range(0, len(entries), 250):
+                        batch = entries[start:start + 250]
+                        cases = " ".join("WHEN ? THEN ?" for _ in batch)
+                        names = ",".join("?" for _ in batch)
+                        params = [value for entry in batch for value in entry]
+                        params.extend(username for username, _ in batch)
+                        c.execute(
+                            f"UPDATE users SET password_hash = CASE username {cases} "
+                            f"ELSE password_hash END WHERE username IN ({names})",
+                            params,
+                        )
+                c.execute("INSERT INTO app_meta(key, value) VALUES (?, ?)", ("demo_passwords_v1", "1"))
         finally:
             if own:
                 c.close()

@@ -17,7 +17,7 @@ class ApiTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="bd-api-")
         self.cfg = {"DATA_DIR": self.tmp, "KEY_DIR": self.tmp + "/keys", "DB_PATH": self.tmp + "/test.db",
-                    "DEMO_PASSWORD": "123456", "TESTING": True}
+                    "DEMO_MODE": False, "DEMO_PASSWORD": "123456", "TESTING": True}
         self.app = create_app(self.cfg)
 
     def tearDown(self):
@@ -25,7 +25,7 @@ class ApiTest(unittest.TestCase):
 
     def login(self, username, password=None):
         if password is None:
-            password = username if username.isdigit() else self.cfg["DEMO_PASSWORD"]
+            password = username if self.cfg["DEMO_MODE"] and username.isdigit() else self.cfg["DEMO_PASSWORD"]
         c = self.app.test_client()
         r = c.post("/api/login", json={"username": username, "password": password})
         self.assertEqual(r.status_code, 200, r.get_json())
@@ -46,6 +46,9 @@ class ApiTest(unittest.TestCase):
         username = "221121521101"
         r = c.post("/api/login", json={"username": username, "password": username})
         self.assertEqual(r.status_code, 200, r.get_json())
+        self.assertEqual(c.post("/api/logout").status_code, 200)
+        old_password = c.post("/api/login", json={"username": username, "password": "123456"})
+        self.assertEqual(old_password.status_code, 401)
 
     def test_khoa_tai_khoan_sau_5_lan_sai(self):
         c = self.app.test_client()
