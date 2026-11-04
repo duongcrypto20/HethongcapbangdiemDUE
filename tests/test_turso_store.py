@@ -123,6 +123,34 @@ class TursoStoreTest(unittest.TestCase):
         )
         connection.execute.assert_not_called()
 
+    def test_remote_fetchall_batches_queries_and_decodes_rows(self):
+        connection = Mock()
+        connection._session.execute_pipeline.return_value = [{
+            "type": "ok",
+            "response": {
+                "type": "execute",
+                "result": {
+                    "cols": [{"name": "id"}, {"name": "name"}],
+                    "rows": [[{"type": "integer", "value": "7"}, {"type": "text", "value": "demo"}]],
+                },
+            },
+        }]
+        store = Store.__new__(Store)
+        store.database_url = "https://db.turso.io"
+
+        rows = store._fetchall_many(connection, ["SELECT id, name FROM users"])
+
+        self.assertEqual(rows, [[{"id": 7, "name": "demo"}]])
+        connection._session.execute_pipeline.assert_called_once_with([{
+            "type": "execute",
+            "stmt": {
+                "sql": "SELECT id, name FROM users",
+                "args": [],
+                "named_args": [],
+                "want_rows": True,
+            },
+        }])
+
     def test_vercel_requires_durable_storage_and_stable_secrets(self):
         with patch("app._load_env_file"), patch.dict(os.environ, {"VERCEL": "1"}, clear=True):
             with self.assertRaisesRegex(RuntimeError, "TURSO_DATABASE_URL"):

@@ -87,7 +87,7 @@ Tiêu đề cột chấp nhận tiếng Việt có dấu; dấu phân cách ph�
 app.py                    Flask: REST API, xác thực, phân quyền theo làn, phục vụ giao diện
 bangdiem/bpmn.py          Danh mục phần tử BPMN, trạng thái ↔ vị trí token, đọc sequenceFlow
 bangdiem/engine.py        Bộ máy quy trình: luật X1–X8, D0–D7, cổng XOR, timer, GPA, hủy, lỗi truy xuất
-bangdiem/store.py         Lưu trữ SQLite/Turso (giao dịch), tài khoản
+bangdiem/store.py         Lưu trữ SQLite/Turso (giao dịch, đọc Turso theo lô), tài khoản
 bangdiem/schema.sql       Lược đồ CSDL
 bangdiem/signing.py       Ký số RSA-PSS, quản lý khóa
 bangdiem/mailer.py        Email: hộp thư + SMTP

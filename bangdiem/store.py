@@ -88,16 +88,58 @@ class Store:
         finally:
             c.close()
 
+    def _fetchall_many(self, c, queries: list[str]) -> list[list[dict]]:
+        if not self.database_url:
+            return [[dict(row) for row in c.execute(sql)] for sql in queries]
+
+        from turso_serverless.protocol import decode_value
+
+        requests = [
+            {"type": "execute", "stmt": {"sql": sql, "args": [], "named_args": [], "want_rows": True}}
+            for sql in queries
+        ]
+        results = c._session.execute_pipeline(requests)
+        output = []
+        for result in results:
+            if result.get("type") == "error":
+                error = result.get("error") or {}
+                raise RuntimeError(error.get("message", "Turso pipeline query failed"))
+            response = result.get("response") or {}
+            if response.get("type") != "execute":
+                raise RuntimeError("Turso pipeline returned an unexpected response type")
+            statement = response.get("result") or {}
+            if not isinstance(statement.get("cols"), list) or not isinstance(statement.get("rows"), list):
+                raise RuntimeError("Turso pipeline returned an invalid query result")
+            columns = [column["name"] for column in statement.get("cols") or []]
+            output.append([
+                dict(zip(columns, (decode_value(value) for value in row)))
+                for row in statement.get("rows") or []
+            ])
+        return output
+
     # ------------------------------------------------------------------ nạp
     def load(self, c: sqlite3.Connection) -> E.Db:
         db = E.Db()
-        st = {r["key"]: json.loads(r["value"]) for r in c.execute("SELECT key, value FROM settings")}
+        settings, students, grades, histories, requests, emails, logs, transcripts, issuance = self._fetchall_many(
+            c, [
+                "SELECT key, value FROM settings",
+                "SELECT * FROM students ORDER BY rowid",
+                "SELECT * FROM grades ORDER BY rowid",
+                "SELECT * FROM request_history ORDER BY request_id, seq",
+                "SELECT * FROM requests ORDER BY created_at, id",
+                "SELECT * FROM emails ORDER BY id",
+                "SELECT * FROM audit_logs ORDER BY id",
+                "SELECT * FROM signed_transcripts ORDER BY signed_at",
+                "SELECT * FROM issuance ORDER BY id",
+            ],
+        )
+        st = {r["key"]: json.loads(r["value"]) for r in settings}
         db.config = {**E.DEFAULT_CONFIG, **st.get("config", {})}
         db.seq = {**db.seq, **st.get("seq", {})}
         db.clock_offset = int(st.get("clockOffset", 0))
         db.fault = bool(st.get("fault", False))
-        db.students = [{v: r[k] for k, v in STUDENT_COLS.items()} for r in c.execute("SELECT * FROM students ORDER BY rowid")]
-        for r in c.execute("SELECT * FROM grades ORDER BY rowid"):
+        db.students = [{v: r[k] for k, v in STUDENT_COLS.items()} for r in students]
+        for r in grades:
             g = {v: r[k] for k, v in GRADE_COLS.items()}
             g["soTC"] = _int_if_whole(g["soTC"])
             if isinstance(g["diem10"], int):
@@ -105,10 +147,10 @@ class Store:
             g["diemChu"] = g["diemChu"] or ""
             db.grades.append(g)
         hist: dict[str, list] = {}
-        for r in c.execute("SELECT * FROM request_history ORDER BY request_id, seq"):
+        for r in histories:
             hist.setdefault(r["request_id"], []).append(
                 {"t": r["t"], "step": r["step"], "actor": r["actor"], "note": r["note"] or "", "kind": r["kind"]})
-        for r in c.execute("SELECT * FROM requests ORDER BY created_at, id"):
+        for r in requests:
             req = {"id": r["id"], "status": r["status"], "createdAt": r["created_at"], "updatedAt": r["updated_at"],
                    "attempts": r["attempts"], "transcriptVersions": r["transcript_versions"],
                    "decisionNote": r["decision_note"] or "", "approvedBy": r["approved_by"], "history": hist.get(r["id"], [])}
@@ -121,17 +163,17 @@ class Store:
             db.requests.append(req)
         db.outbox = [{"id": r["id"], "t": r["t"], "to": r["to_addr"], "toRole": r["to_role"], "subject": r["subject"],
                       "body": r["body"], "reqId": r["request_id"], "step": r["step"], "delivery": r["delivery"]}
-                     for r in c.execute("SELECT * FROM emails ORDER BY id")]
+                     for r in emails]
         db.logs = [{"id": r["id"], "t": r["t"], "level": r["level"], "msg": r["msg"], "reqId": r["request_id"],
-                    "actor": r["actor"]} for r in c.execute("SELECT * FROM audit_logs ORDER BY id")]
+                    "actor": r["actor"]} for r in logs]
         db.archive = [{"code": r["code"], "reqId": r["request_id"], "mssv": r["mssv"], "hash": r["hash"],
                        "signature": r["signature"], "keyId": r["key_id"], "signedAt": r["signed_at"],
                        "transcript": json.loads(r["transcript_json"])}
-                      for r in c.execute("SELECT * FROM signed_transcripts ORDER BY signed_at")]
+                      for r in transcripts]
         db.issuance = [{"t": r["t"], "reqId": r["request_id"], "mssv": r["mssv"], "hoTen": r["ho_ten"], "code": r["code"],
                         "dienTu": True, "soBanGiay": r["so_ban_giay"], "mucDich": r["muc_dich"],
                         "approvedBy": r["approved_by"], "leadTimeH": r["lead_time_h"]}
-                       for r in c.execute("SELECT * FROM issuance ORDER BY id")]
+                       for r in issuance]
         return db
 
     # ------------------------------------------------------------------ ghi
