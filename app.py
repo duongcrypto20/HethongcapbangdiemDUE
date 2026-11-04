@@ -112,12 +112,17 @@ def create_app(test_config: dict | None = None) -> Flask:
             pw = generate_password_hash(cfg["DEMO_PASSWORD"])
             existing = {u["username"] for u in ST.list_users(c)}
             for username, name, role, dept in STAFF:
-                ST.upsert_user(c, username, None if username in existing else pw, name, role, dept)
+                ST.upsert_user(c, username, pw if cfg["DEMO_MODE"] or username not in existing else None,
+                               name, role, dept)
             for dept in sorted({s["khoa"] for s in db.students if s["khoa"]}):
                 u = khoa_username(dept)
-                ST.upsert_user(c, u, None if u in existing else pw, f"Văn phòng {dept}", "KHOA", dept)
+                ST.upsert_user(c, u, pw if cfg["DEMO_MODE"] or u not in existing else None,
+                               f"Văn phòng {dept}", "KHOA", dept)
             for s in db.students:
-                ST.upsert_user(c, s["mssv"], None if s["mssv"] in existing else pw, s["hoTen"], "SV", None, s["mssv"])
+                student_pw = generate_password_hash(s["mssv"]) if cfg["DEMO_MODE"] else pw
+                ST.upsert_user(c, s["mssv"],
+                               student_pw if cfg["DEMO_MODE"] or s["mssv"] not in existing else None,
+                               s["hoTen"], "SV", None, s["mssv"])
         finally:
             if own:
                 c.close()

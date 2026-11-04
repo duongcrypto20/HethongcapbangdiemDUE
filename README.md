@@ -21,7 +21,9 @@ python app.py                   # mở http://127.0.0.1:5000
 
 Lần chạy đầu, hệ thống tự tạo CSDL `data/bangdiem.db` với dữ liệu mẫu và sinh cặp khóa ký số trong `keys/`.
 
-### Tài khoản demo chính (mật khẩu `123456`)
+### Tài khoản demo chính
+
+Sinh viên dùng MSSV làm cả tên đăng nhập và mật khẩu. Tài khoản cán bộ dùng mật khẩu demo chung `123456`.
 
 | Vai trò | Tên đăng nhập |
 |---|---|
@@ -30,7 +32,7 @@ Lần chạy đầu, hệ thống tự tạo CSDL `data/bangdiem.db` với dữ 
 | Phòng Đào tạo | `pdt.hong` |
 | Phó phòng | `pp.lethi` |
 
-Trang đăng nhập liệt kê sẵn các tài khoản demo và kịch bản kiểm thử; bấm vào để đăng nhập nhanh.
+Trang đăng nhập liệt kê sẵn các tài khoản demo và kịch bản kiểm thử; bấm vào để đăng nhập nhanh. Chế độ này chỉ phù hợp với dữ liệu mẫu, không bật khi triển khai dữ liệu thật.
 
 ## Kiểm thử tự động
 

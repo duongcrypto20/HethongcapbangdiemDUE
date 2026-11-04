@@ -23,7 +23,9 @@ class ApiTest(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def login(self, username, password="123456"):
+    def login(self, username, password=None):
+        if password is None:
+            password = username if username.isdigit() else self.cfg["DEMO_PASSWORD"]
         c = self.app.test_client()
         r = c.post("/api/login", json={"username": username, "password": password})
         self.assertEqual(r.status_code, 200, r.get_json())
@@ -37,6 +39,13 @@ class ApiTest(unittest.TestCase):
         c = self.app.test_client()
         self.assertEqual(c.post("/api/login", json={"username": "pdt.hong", "password": "sai"}).status_code, 401)
         self.assertEqual(c.get("/api/state").status_code, 401)
+
+    def test_sinh_vien_dang_nhap_bang_mssv_lam_ten_va_mat_khau(self):
+        demo_app = create_app({**self.cfg, "DEMO_MODE": True})
+        c = demo_app.test_client()
+        username = "221121521101"
+        r = c.post("/api/login", json={"username": username, "password": username})
+        self.assertEqual(r.status_code, 200, r.get_json())
 
     def test_khoa_tai_khoan_sau_5_lan_sai(self):
         c = self.app.test_client()

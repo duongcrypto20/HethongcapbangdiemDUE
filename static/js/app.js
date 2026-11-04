@@ -192,7 +192,7 @@
           <div class="btns"><button class="btn primary" type="submit">Đăng nhập</button><a href="#tra-cuu">Tra cứu bảng điểm bằng mã xác thực</a></div>
         </form>
       </section>
-      ${d ? `<section class="panel"><div class="title">Tài khoản demo <span class="sub">Mật khẩu chung: <b class="mono">${esc(d.password)}</b></span></div>
+      ${d ? `<section class="panel"><div class="title">Tài khoản demo <span class="sub">Sinh viên: mật khẩu là MSSV · Cán bộ: <b class="mono">${esc(d.password)}</b></span></div>
         <p style="margin-top:0;font-size:13px">Bấm vào một tài khoản để đăng nhập nhanh. Mỗi sinh viên mẫu đi qua một nhánh khác nhau của quy trình.</p>
         ${groups.map(([r, list]) => `<div class="acc-group"><h4>${ROLE_LABEL[r]}</h4><div class="acc-list">${list.map((a) => `<button class="acc" data-action="quick-login" data-u="${esc(a.username)}"><b>${esc(a.name)}</b><span>${esc(a.username)}</span></button>`).join('')}</div></div>`).join('')}
       </section>` : ''}
@@ -816,7 +816,10 @@
     },
     async 'try-code'(d) { ui.verify = d.code; await doVerify(); },
     print() { ui.dtab = 'transcript'; renderDrawer(); setTimeout(() => window.print(), 50); },
-    async 'quick-login'(d) { await doLogin(d.u, app.demo.password); },
+    async 'quick-login'(d) {
+      const account = app.demo.accounts.find((a) => a.username === d.u);
+      await doLogin(d.u, account && account.role === 'SV' ? d.u : app.demo.password);
+    },
     async logout() { try { await api('POST', '/api/logout', {}); } catch (e) { /* bỏ qua */ } app.me = null; app.state = null; ui.open = null; app.detail = null; await boot(); },
   };
   async function doVerify() {
