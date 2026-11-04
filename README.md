@@ -23,11 +23,11 @@ Lần chạy đầu, hệ thống tự tạo CSDL `data/bangdiem.db` với dữ 
 
 ### Tài khoản demo chính
 
-Sinh viên dùng MSSV làm cả tên đăng nhập và mật khẩu. Tài khoản cán bộ dùng mật khẩu demo chung `123456`.
+Sinh viên dùng họ và tên làm tên đăng nhập, MSSV làm mật khẩu. Tài khoản cán bộ dùng mật khẩu demo chung `123456`.
 
 | Vai trò | Tên đăng nhập |
 |---|---|
-| Sinh viên | `241121521209` (Ngô Quỳnh Dương), `241121521229` (Võ Trương Gia Nghi), `2421121521231` (Lê Thị Thanh Nhàn), `241121521243` (Trần Tôn Phương Thảo), `241121521230` (Đinh Thị Mỹ Ngọc), `241121521220` (Võ Thị Lạc) |
+| Sinh viên | `Ngô Quỳnh Dương` / `241121521209`, `Võ Trương Gia Nghi` / `241121521229`, `Lê Thị Thanh Nhàn` / `2421121521231`, `Trần Tôn Phương Thảo` / `241121521243`, `Đinh Thị Mỹ Ngọc` / `241121521230`, `Võ Thị Lạc` / `241121521220` |
 | Khoa | `khoa.thongketinhoc`, `khoa.quantrikinhdoanh`, `khoa.ketoan` |
 | Phòng Đào tạo | `pdt.hong` |
 | Phó phòng | `pp.lethi` |
@@ -49,20 +49,20 @@ Phòng Đào tạo cũng chạy được bộ kịch bản quy trình ngay trên
 
 | # | Đăng nhập | Thao tác | Phần tử BPMN |
 |---|---|---|---|
-| 1 | SV `221121506109` | Tạo yêu cầu, chọn thêm 2 bản giấy | `s_task → ca_xt → t_truyxuat → t_doichieu → t_tao` |
+| 1 | SV `Trương Mỹ Duyên` (mật khẩu `221121506109`) | Tạo yêu cầu, chọn thêm 2 bản giấy | `s_task → ca_xt → t_truyxuat → t_doichieu → t_tao` |
 | 2 | `pdt.hong` | Phòng Đào tạo › Chờ kiểm tra › Đạt | `g_dat → t_pd` |
 | 3 | `pp.lethi` | Phê duyệt & ký số (nhận mã xác thực) | `g_pd → t_dongdau → Gateway_0m52u6m → t_guidt` |
 | 4 | `pdt.hong`, `pp.lethi` | In → Đóng dấu → Xác nhận đã giao | `t_in → Activity_0xvx345 → Activity_15aejsy → t_nhatky → end_ht` |
 | 5 | Không cần | Tra cứu › nhập mã xác thực | Kiểm chứng chữ ký RSA |
 | 6 | `khoa.quantrikinhdoanh` | Rà soát điểm bất thường của Huỳnh Quốc Nam › Xác nhận › Đã hiệu chỉnh | `t_khoa → g_kh(Có) → g_mdc` |
-| 7 | SV `221121521103` | Mở yêu cầu đang chờ Khoa › Hủy yêu cầu | `EventSub_SVChuDongHuy` |
+| 7 | SV `Phạm Gia Hân` (mật khẩu `221121521103`) | Mở yêu cầu đang chờ Khoa › Hủy yêu cầu | `EventSub_SVChuDongHuy` |
 | 8 | `pdt.hong` | Hệ thống › Bật giả lập sự cố, rồi SV gửi yêu cầu mới | `Boundary_LoiTruyXuat → End_LoiHeThong` |
 | 9 | Bất kỳ | Nút **+1 ngày** trên cùng (bấm 3 lần) | `e_t3`, `b_khoa`, `b_pp` |
 
 ## Dùng dữ liệu test của giảng viên
 
 1. Đăng nhập `pdt.hong` › **Hệ thống & dữ liệu › Khôi phục dữ liệu** › "Xóa sạch để nạp dữ liệu giảng viên" (bấm 2 lần).
-2. **CSDL sinh viên**: dán CSV hoặc chọn tệp. Cột `mssv, ho_ten, ngay_sinh, gioi_tinh, lop, khoa, nganh, khoa_hoc, email, trang_thai`. Mỗi sinh viên được tạo tài khoản SSO (tên đăng nhập = MSSV), mỗi Khoa mới được tạo tài khoản văn phòng Khoa.
+2. **CSDL sinh viên**: dán CSV hoặc chọn tệp. Cột `mssv, ho_ten, ngay_sinh, gioi_tinh, lop, khoa, nganh, khoa_hoc, email, trang_thai`. Mỗi sinh viên được tạo tài khoản đăng nhập bằng họ tên (mật khẩu là MSSV), mỗi Khoa mới được tạo tài khoản văn phòng Khoa.
 3. **CSDL điểm**: cột `mssv, nam_hoc, hoc_ky, ma_hp, ten_hp, so_tc, diem_10, diem_chu`.
 4. **Nhập yêu cầu hàng loạt**: cột `mssv, ho_ten, ngay_sinh, email, sdt, muc_dich, ngon_ngu, ban_giay, so_ban`.
 
@@ -78,7 +78,7 @@ Tiêu đề cột chấp nhận tiếng Việt có dấu; dấu phân cách ph�
 | `SIGNING_PRIVATE_KEY_B64` | Khóa RSA riêng PEM đã mã hóa, Base64; cần giữ ổn định để chữ ký xác minh được giữa các instance. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | Gửi email thật (vd. Gmail `smtp.gmail.com:587` + mật khẩu ứng dụng). Để trống thì email chỉ lưu trong hộp thư hệ thống. |
 | `SMTP_REDIRECT_TO` | Khi demo, chuyển mọi email tới một địa chỉ của nhóm |
-| `DEMO_MODE` | `1`: hiện tài khoản demo và nút tua đồng hồ; sinh viên dùng MSSV làm mật khẩu, cán bộ dùng `DEMO_PASSWORD`. `0`: ẩn tài khoản demo và tắt nút tua đồng hồ. Chỉ bật với dữ liệu mẫu. |
+| `DEMO_MODE` | `1`: hiện tài khoản demo và nút tua đồng hồ; sinh viên đăng nhập bằng họ tên với mật khẩu là MSSV, cán bộ dùng `123456`. `0`: ẩn tài khoản demo và tắt nút tua đồng hồ. Chỉ bật với dữ liệu mẫu. |
 | `COOKIE_SECURE` | `1` khi chạy sau HTTPS |
 
 ## Cấu trúc mã nguồn

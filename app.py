@@ -76,6 +76,8 @@ def create_app(test_config: dict | None = None) -> Flask:
         "SEED_SAMPLE": True,
     }
     cfg.update(test_config or {})
+    if cfg["DEMO_MODE"]:
+        cfg["DEMO_PASSWORD"] = "123456"
     app.config.update(cfg)
     Path(cfg["DATA_DIR"]).mkdir(parents=True, exist_ok=True)
 
@@ -105,35 +107,35 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     # ------------------------------------------------------------ tài khoản
     def sync_accounts(db: E.Db, c=None) -> None:
-        """Mỗi SV trong CSDL có 1 tài khoản SSO (username = MSSV); mỗi Khoa có 1 tài khoản văn phòng."""
+        """Đồng bộ tài khoản demo; sinh viên đăng nhập bằng họ tên và MSSV."""
         own = c is None
         c = c or store.connect()
         try:
             pw = generate_password_hash(cfg["DEMO_PASSWORD"])
             existing = {u["username"] for u in ST.list_users(c)}
-            sync_demo_passwords = cfg["DEMO_MODE"] and not c.execute(
-                "SELECT 1 FROM app_meta WHERE key = ?", ("demo_passwords_v1",)
+            sync_demo_credentials = cfg["DEMO_MODE"] and not c.execute(
+                "SELECT 1 FROM app_meta WHERE key = ?", ("demo_credentials_v2",)
             ).fetchone()
-            demo_password_hashes = {}
+            demo_credential_hashes = {}
             for username, name, role, dept in STAFF:
                 ST.upsert_user(c, username, pw if username not in existing else None, name, role, dept)
-                if sync_demo_passwords and username in existing:
-                    demo_password_hashes[username] = pw
+                if sync_demo_credentials and username in existing:
+                    demo_credential_hashes[username] = pw
             for dept in sorted({s["khoa"] for s in db.students if s["khoa"]}):
                 u = khoa_username(dept)
                 ST.upsert_user(c, u, pw if u not in existing else None, f"Văn phòng {dept}", "KHOA", dept)
-                if sync_demo_passwords and u in existing:
-                    demo_password_hashes[u] = pw
+                if sync_demo_credentials and u in existing:
+                    demo_credential_hashes[u] = pw
             for s in db.students:
                 username = s["mssv"]
                 student_pw = None
                 if username not in existing:
                     student_pw = generate_password_hash(username) if cfg["DEMO_MODE"] else pw
-                elif sync_demo_passwords:
-                    demo_password_hashes[username] = generate_password_hash(username)
+                elif sync_demo_credentials:
+                    demo_credential_hashes[username] = generate_password_hash(username)
                 ST.upsert_user(c, username, student_pw, s["hoTen"], "SV", None, username)
-            if sync_demo_passwords:
-                entries = list(demo_password_hashes.items())
+            if sync_demo_credentials:
+                entries = list(demo_credential_hashes.items())
                 if entries:
                     for start in range(0, len(entries), 250):
                         batch = entries[start:start + 250]
@@ -146,7 +148,7 @@ def create_app(test_config: dict | None = None) -> Flask:
                             f"ELSE password_hash END WHERE username IN ({names})",
                             params,
                         )
-                c.execute("INSERT INTO app_meta(key, value) VALUES (?, ?)", ("demo_passwords_v1", "1"))
+                c.execute("INSERT INTO app_meta(key, value) VALUES (?, ?)", ("demo_credentials_v2", "1"))
         finally:
             if own:
                 c.close()
@@ -279,9 +281,10 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.post("/api/login")
     def login():
         d = body()
-        username = str(d.get("username", "")).strip().lower()
+        username = str(d.get("username", "")).strip()
+        login_key = username.casefold()
         now_s = time.time()
-        fails = [t for t in login_fail.get(username, []) if now_s - t < 300]
+        fails = [t for t in login_fail.get(login_key, []) if now_s - t < 300]
         if len(fails) >= 5:
             return api_error("Sai mật khẩu quá 5 lần, hãy thử lại sau 5 phút", 429)
         c = store.connect()
@@ -290,9 +293,9 @@ def create_app(test_config: dict | None = None) -> Flask:
         finally:
             c.close()
         if not u or not check_password_hash(u["password_hash"], str(d.get("password", ""))):
-            login_fail[username] = fails + [now_s]
+            login_fail[login_key] = fails + [now_s]
             return api_error("Sai tên đăng nhập hoặc mật khẩu", 401)
-        login_fail.pop(username, None)
+        login_fail.pop(login_key, None)
         session.clear()
         session["uid"] = u["id"]
         session["csrf"] = secrets.token_urlsafe(24)
@@ -312,7 +315,11 @@ def create_app(test_config: dict | None = None) -> Flask:
                 c = store.connect()
                 try:
                     demo = {"password": cfg["DEMO_PASSWORD"], "accounts": [
-                        {"username": x["username"], "name": x["full_name"], "role": x["role"], "department": x["department"]}
+                        {
+                            "username": x["full_name"] if x["role"] == "SV" else x["username"],
+                            "name": x["full_name"], "mssv": x["mssv"],
+                            "role": x["role"], "department": x["department"],
+                        }
                         for x in ST.list_users(c)]}
                 finally:
                     c.close()

@@ -40,15 +40,28 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(c.post("/api/login", json={"username": "pdt.hong", "password": "sai"}).status_code, 401)
         self.assertEqual(c.get("/api/state").status_code, 401)
 
-    def test_sinh_vien_dang_nhap_bang_mssv_lam_ten_va_mat_khau(self):
-        demo_app = create_app({**self.cfg, "DEMO_MODE": True})
+    def test_sinh_vien_dang_nhap_bang_ho_ten_va_mssv(self):
+        demo_app = create_app({**self.cfg, "DEMO_MODE": True, "DEMO_PASSWORD": "ignored-in-demo-mode"})
         c = demo_app.test_client()
-        username = "221121521101"
-        r = c.post("/api/login", json={"username": username, "password": username})
+        username = "  trần minh anh "
+        mssv = "221121521101"
+        demo = c.get("/api/me").get_json()["demo"]
+        self.assertEqual(demo["password"], "123456")
+        student_account = next(a for a in demo["accounts"] if a["mssv"] == mssv)
+        self.assertEqual(student_account["username"], "Trần Minh Anh")
+        r = c.post("/api/login", json={"username": username, "password": mssv})
         self.assertEqual(r.status_code, 200, r.get_json())
         self.assertEqual(c.post("/api/logout").status_code, 200)
-        old_password = c.post("/api/login", json={"username": username, "password": "123456"})
-        self.assertEqual(old_password.status_code, 401)
+        student_id_login = c.post("/api/login", json={"username": mssv, "password": mssv})
+        self.assertEqual(student_id_login.status_code, 200, student_id_login.get_json())
+        self.assertEqual(c.post("/api/logout").status_code, 200)
+        wrong_password = c.post("/api/login", json={"username": username, "password": "123456"})
+        self.assertEqual(wrong_password.status_code, 401)
+        staff_login = c.post("/api/login", json={"username": "pdt.hong", "password": "123456"})
+        self.assertEqual(staff_login.status_code, 200, staff_login.get_json())
+        self.assertEqual(c.post("/api/logout").status_code, 200)
+        department_login = c.post("/api/login", json={"username": "khoa.thongketinhoc", "password": "123456"})
+        self.assertEqual(department_login.status_code, 200, department_login.get_json())
 
     def test_khoa_tai_khoan_sau_5_lan_sai(self):
         c = self.app.test_client()

@@ -185,16 +185,16 @@
     return `<div class="login">
       <section class="card">
         <h1>Đăng nhập</h1>
-        <p class="muted" style="margin:0">Sinh viên đăng nhập bằng tài khoản SSO (MSSV). Cán bộ Khoa, Phòng Đào tạo, Phó phòng dùng tài khoản được cấp. Hệ thống phân quyền đúng 4 làn của BPMN.</p>
+        <p class="muted" style="margin:0">Sinh viên đăng nhập bằng họ và tên, mật khẩu là MSSV. Cán bộ Khoa, Phòng Đào tạo, Phó phòng dùng tài khoản được cấp. Hệ thống phân quyền đúng 4 làn của BPMN.</p>
         <form class="stack" data-form="login" style="gap:12px">
-          <div class="field"><label for="lg-u">Tên đăng nhập / MSSV</label><input id="lg-u" name="username" autocomplete="username" required></div>
+          <div class="field"><label for="lg-u">Tên đăng nhập (SV: Họ và tên)</label><input id="lg-u" name="username" autocomplete="username" required></div>
           <div class="field"><label for="lg-p">Mật khẩu</label><input id="lg-p" name="password" type="password" autocomplete="current-password" required></div>
           <div class="btns"><button class="btn primary" type="submit">Đăng nhập</button><a href="#tra-cuu">Tra cứu bảng điểm bằng mã xác thực</a></div>
         </form>
       </section>
-      ${d ? `<section class="panel"><div class="title">Tài khoản demo <span class="sub">Sinh viên: mật khẩu là MSSV · Cán bộ: <b class="mono">${esc(d.password)}</b></span></div>
+      ${d ? `<section class="panel"><div class="title">Tài khoản demo <span class="sub">Sinh viên: tên đăng nhập là họ và tên, mật khẩu là MSSV · Cán bộ: <b class="mono">${esc(d.password)}</b></span></div>
         <p style="margin-top:0;font-size:13px">Bấm vào một tài khoản để đăng nhập nhanh. Mỗi sinh viên mẫu đi qua một nhánh khác nhau của quy trình.</p>
-        ${groups.map(([r, list]) => `<div class="acc-group"><h4>${ROLE_LABEL[r]}</h4><div class="acc-list">${list.map((a) => `<button class="acc" data-action="quick-login" data-u="${esc(a.username)}"><b>${esc(a.name)}</b><span>${esc(a.username)}</span></button>`).join('')}</div></div>`).join('')}
+        ${groups.map(([r, list]) => `<div class="acc-group"><h4>${ROLE_LABEL[r]}</h4><div class="acc-list">${list.map((a) => `<button class="acc" data-action="quick-login" data-u="${esc(a.username)}"><b>${esc(a.name)}</b><span>${a.role === 'SV' ? `MSSV: ${esc(a.mssv)}` : esc(a.username)}</span></button>`).join('')}</div></div>`).join('')}
       </section>` : ''}
     </div>`;
   }
@@ -511,7 +511,7 @@
     },
     students() {
       const s = app.state;
-      return importPanel('students', 'Nhập CSDL sinh viên', 'Cột: mssv, ho_ten, ngay_sinh, gioi_tinh, lop, khoa, nganh, khoa_hoc, email, trang_thai. Mỗi sinh viên được tạo tài khoản SSO (tên đăng nhập = MSSV); mỗi Khoa mới được tạo tài khoản văn phòng Khoa.') +
+      return importPanel('students', 'Nhập CSDL sinh viên', 'Cột: mssv, ho_ten, ngay_sinh, gioi_tinh, lop, khoa, nganh, khoa_hoc, email, trang_thai. Sinh viên đăng nhập bằng họ tên, mật khẩu là MSSV; mỗi Khoa mới được tạo tài khoản văn phòng Khoa.') +
         `<section class="panel"><div class="title">CSDL sinh viên <span class="sub">${s.students.length} sinh viên · <a href="/api/admin/export/students.csv">Xuất CSV</a></span></div><div class="table-wrap"><table class="grid"><thead><tr><th>MSSV</th><th>Họ tên</th><th>Ngày sinh</th><th>Lớp</th><th>Khoa</th><th>Email</th><th>Tình trạng</th><th class="r">Dòng điểm</th></tr></thead><tbody>${s.students.map((x) => `<tr><td class="mono">${x.mssv}</td><td>${esc(x.hoTen)}</td><td class="num">${dmy(x.ngaySinh)}</td><td>${esc(x.lop)}</td><td>${esc(x.khoa)}</td><td>${esc(x.email)}</td><td>${esc(x.trangThai)}</td><td class="r num">${s.gradeCounts[x.mssv] || 0}</td></tr>`).join('')}</tbody></table></div></section>`;
     },
     grades() {
@@ -818,7 +818,7 @@
     print() { ui.dtab = 'transcript'; renderDrawer(); setTimeout(() => window.print(), 50); },
     async 'quick-login'(d) {
       const account = app.demo.accounts.find((a) => a.username === d.u);
-      await doLogin(d.u, account && account.role === 'SV' ? d.u : app.demo.password);
+      await doLogin(d.u, account && account.role === 'SV' ? account.mssv : app.demo.password);
     },
     async logout() { try { await api('POST', '/api/logout', {}); } catch (e) { /* bỏ qua */ } app.me = null; app.state = null; ui.open = null; app.detail = null; await boot(); },
   };

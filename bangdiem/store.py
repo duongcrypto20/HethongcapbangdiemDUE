@@ -12,6 +12,7 @@ import json
 import sqlite3
 import threading
 import time
+import unicodedata
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -219,8 +220,20 @@ def get_user(c: sqlite3.Connection, user_id: int) -> dict | None:
 
 
 def find_user(c: sqlite3.Connection, username: str) -> dict | None:
-    r = c.execute("SELECT * FROM users WHERE username = ? AND active = 1", (username.strip().lower(),)).fetchone()
-    return dict(r) if r else None
+    username = username.strip()
+    r = c.execute("SELECT * FROM users WHERE username = ? AND active = 1", (username.lower(),)).fetchone()
+    if r:
+        return dict(r)
+
+    normalize = lambda value: " ".join(unicodedata.normalize("NFKC", value).casefold().split())
+    normalized_name = normalize(username)
+    if not normalized_name:
+        return None
+    matches = [
+        row for row in c.execute("SELECT * FROM users WHERE role = 'SV' AND active = 1")
+        if normalize(row["full_name"]) == normalized_name
+    ]
+    return dict(matches[0]) if len(matches) == 1 else None
 
 
 def upsert_user(c: sqlite3.Connection, username: str, password_hash: str | None, full_name: str, role: str,
