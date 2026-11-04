@@ -107,5 +107,5 @@ Nguyên tắc: **mọi thay đổi trạng thái đi qua `engine.py`**, mỗi h�
 - SSO là mô phỏng (đăng nhập bằng MSSV + mật khẩu), chưa kết nối máy chủ SSO thật của trường.
 - Ký số dùng cặp khóa RSA tự sinh, chưa phải chứng thư số do tổ chức được cấp phép phát hành; "đóng dấu đỏ" là thao tác xác nhận trên hệ thống.
 - SQLite và khóa ghi toàn cục phù hợp quy mô một trường; quy mô lớn hơn nên chuyển sang PostgreSQL.
-- Vercel cần cấu hình `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `FLASK_SECRET_KEY`, `SIGN_KEY_PASSPHRASE` và `SIGNING_PRIVATE_KEY_B64` trong Project Settings › Environment Variables. Tạo khóa RSA ổn định local rồi Base64 hóa `keys/signing_key.pem`; không đưa token hoặc khóa riêng vào Git.
+- Vercel cần cấu hình `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `FLASK_SECRET_KEY`, `SIGN_KEY_PASSPHRASE` và `SIGNING_PRIVATE_KEY_B64` trong Project Settings › Environment Variables. Function chạy tại Singapore (`sin1`), gần Turso `ap-southeast-1` để giảm độ trễ. Tạo khóa RSA ổn định local rồi Base64 hóa `keys/signing_key.pem`; không đưa token hoặc khóa riêng vào Git.
 - Mỗi thao tác ghi lấy khóa giao dịch ở cơ sở dữ liệu trước khi đọc snapshot; thao tác chỉ đọc không ghi lại toàn bộ dữ liệu. Điều này ngăn các instance Vercel ghi đè snapshot của nhau. Với tải ghi lớn hơn, nên chuyển sang PostgreSQL.
