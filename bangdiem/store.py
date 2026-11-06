@@ -88,6 +88,58 @@ class Store:
         finally:
             c.close()
 
+    def ensure_demo_grade_reference(self) -> None:
+        """Create a synthetic comparison source only when no reference source exists yet."""
+        with _lock:
+            c = self.connect()
+            try:
+                c.execute("BEGIN IMMEDIATE")
+                has_source = c.execute("SELECT 1 FROM grade_reference_sources LIMIT 1").fetchone()
+                if not has_source:
+                    from . import seed
+
+                    rows = seed.build_data()["referenceGrades"]
+                    c.execute(
+                        "INSERT INTO grade_reference_sources(source_id, label, kind, created_at) VALUES (?, ?, ?, ?)",
+                        ("demo_seed_v1", "Nguồn tham chiếu demo (sinh tự động)", "demo", int(time.time() * 1000)),
+                    )
+                    self._executemany(
+                        c,
+                        "INSERT INTO grade_reference_grades(source_id, row_no, mssv, nam_hoc, hoc_ky, ma_hp, "
+                        "ten_hp, so_tc, diem_10, diem_chu) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        [
+                            ("demo_seed_v1", index, row["mssv"], row["namHoc"], row["hocKy"], row["maHP"],
+                             row["tenHP"], row["soTC"], row["diem10"], row["diemChu"])
+                            for index, row in enumerate(rows, 1)
+                        ],
+                    )
+                c.execute("COMMIT")
+            except Exception:
+                if c.in_transaction:
+                    c.execute("ROLLBACK")
+                raise
+            finally:
+                c.close()
+
+    def replace_grade_reference(self, c, label: str, rows: list[dict], created_at: int) -> None:
+        """Replace only the read-only comparison source inside the caller's transaction."""
+        c.execute("DELETE FROM grade_reference_grades")
+        c.execute("DELETE FROM grade_reference_sources")
+        c.execute(
+            "INSERT INTO grade_reference_sources(source_id, label, kind, created_at) VALUES (?, ?, ?, ?)",
+            ("imported_reference", label, "imported", created_at),
+        )
+        self._executemany(
+            c,
+            "INSERT INTO grade_reference_grades(source_id, row_no, mssv, nam_hoc, hoc_ky, ma_hp, "
+            "ten_hp, so_tc, diem_10, diem_chu) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                ("imported_reference", index, row["mssv"], row["namHoc"], row["hocKy"], row["maHP"],
+                 row["tenHP"], row["soTC"], row["diem10"], row["diemChu"])
+                for index, row in enumerate(rows, 1)
+            ],
+        )
+
     def _fetchall_many(self, c, queries: list[str]) -> list[list[dict]]:
         if not self.database_url:
             return [[dict(row) for row in c.execute(sql)] for sql in queries]
@@ -120,11 +172,14 @@ class Store:
     # ------------------------------------------------------------------ nạp
     def load(self, c: sqlite3.Connection) -> E.Db:
         db = E.Db()
-        settings, students, grades, histories, requests, emails, logs, transcripts, issuance = self._fetchall_many(
+        settings, students, grades, reference_sources, reference_grades, histories, requests, emails, logs, transcripts, issuance = self._fetchall_many(
             c, [
                 "SELECT key, value FROM settings",
                 "SELECT * FROM students ORDER BY rowid",
                 "SELECT * FROM grades ORDER BY rowid",
+                "SELECT source_id, label, kind, created_at FROM grade_reference_sources ORDER BY created_at, source_id",
+                "SELECT source_id, mssv, nam_hoc, hoc_ky, ma_hp, ten_hp, so_tc, diem_10, diem_chu "
+                "FROM grade_reference_grades ORDER BY source_id, row_no",
                 "SELECT * FROM request_history ORDER BY request_id, seq",
                 "SELECT * FROM requests ORDER BY created_at, id",
                 "SELECT * FROM emails ORDER BY id",
@@ -146,6 +201,24 @@ class Store:
                 g["diem10"] = float(g["diem10"])
             g["diemChu"] = g["diemChu"] or ""
             db.grades.append(g)
+        db.gradeSources = [
+            {"id": r["source_id"], "label": r["label"], "kind": r["kind"], "createdAt": r["created_at"]}
+            for r in reference_sources
+        ]
+        db.referenceGrades = [
+            {
+                "sourceId": r["source_id"],
+                "mssv": r["mssv"],
+                "namHoc": r["nam_hoc"],
+                "hocKy": r["hoc_ky"],
+                "maHP": r["ma_hp"],
+                "tenHP": r["ten_hp"],
+                "soTC": E.to_num(r["so_tc"]) if E.to_num(r["so_tc"]) is not None else r["so_tc"],
+                "diem10": E.parse_score(r["diem_10"]),
+                "diemChu": r["diem_chu"] or "",
+            }
+            for r in reference_grades
+        ]
         hist: dict[str, list] = {}
         for r in histories:
             hist.setdefault(r["request_id"], []).append(

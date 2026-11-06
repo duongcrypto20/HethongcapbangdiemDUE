@@ -42,6 +42,29 @@ CREATE TABLE IF NOT EXISTS grades (
 );
 CREATE INDEX IF NOT EXISTS ix_grades_mssv ON grades(mssv);
 
+-- Nguồn điểm tham chiếu tách biệt; chỉ PĐT được thay nguồn qua API quản trị.
+CREATE TABLE IF NOT EXISTS grade_reference_sources (
+    source_id  TEXT PRIMARY KEY,
+    label      TEXT NOT NULL,
+    kind       TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS grade_reference_grades (
+    source_id TEXT NOT NULL REFERENCES grade_reference_sources(source_id) ON DELETE CASCADE,
+    row_no    INTEGER NOT NULL,
+    mssv      TEXT NOT NULL,
+    nam_hoc   TEXT NOT NULL,
+    hoc_ky    TEXT NOT NULL,
+    ma_hp     TEXT NOT NULL,
+    ten_hp    TEXT,
+    so_tc     TEXT,
+    diem_10   TEXT,
+    diem_chu  TEXT,
+    PRIMARY KEY (source_id, row_no)
+);
+CREATE INDEX IF NOT EXISTS ix_grade_reference_lookup
+    ON grade_reference_grades(source_id, mssv, nam_hoc, hoc_ky, ma_hp);
+
 -- Yêu cầu cấp bảng điểm = một thể hiện (instance) của quy trình
 CREATE TABLE IF NOT EXISTS requests (
     id                  TEXT PRIMARY KEY,           -- BD{năm}-{số thứ tự}

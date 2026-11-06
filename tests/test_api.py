@@ -107,14 +107,49 @@ class ApiTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200, response.get_json())
         assistant = response.get_json()["reviewAssistant"]
-        self.assertEqual(assistant["method"], "local-rules")
+        self.assertEqual(assistant["method"], "local-rules-and-source-comparison")
         self.assertTrue(assistant["readOnly"])
         self.assertTrue(assistant["humanDecisionRequired"])
+        self.assertTrue(assistant["sourceComparisons"])
+        self.assertEqual(assistant["sourceComparisons"][0]["sourceKind"], "demo")
+        self.assertGreater(assistant["sourceComparisons"][0]["differenceCount"], 0)
         self.assertIn("không tự sửa dữ liệu", assistant["limitations"])
+        self.assertIn("BẢN NHÁP", assistant["draftNote"])
 
         pdt = self.login("pdt.hong")
         pdt_detail = pdt.get(f"/api/requests/{pending['id']}").get_json()
         self.assertNotIn("reviewAssistant", pdt_detail)
+
+    def test_pdt_can_replace_reference_source_without_changing_live_grades(self):
+        pdt = self.login("pdt.hong")
+        before = pdt.get("/api/admin/grades?mssv=221121521103").get_json()
+        source_csv = (
+            "mssv,nam_hoc,hoc_ky,ma_hp,ten_hp,so_tc,diem_10,diem_chu\n"
+            "221121521103,2022-2023,HK1,MIS1001,Tin học văn phòng,3,8.0,B\n"
+        )
+        imported = self.post(pdt, "/api/admin/reference-grades", {
+            "sourceName": "Nguồn tham chiếu kiểm thử",
+            "text": source_csv,
+        })
+        self.assertEqual(imported.status_code, 200, imported.get_json())
+        self.assertEqual(imported.get_json()["result"]["added"], 1)
+
+        after = pdt.get("/api/admin/grades?mssv=221121521103").get_json()
+        self.assertEqual(before["grades"], after["grades"])
+        self.assertEqual(after["referenceSources"][0]["label"], "Nguồn tham chiếu kiểm thử")
+        self.assertEqual(after["referenceSources"][0]["rowCount"], 1)
+
+        invalid = self.post(pdt, "/api/admin/reference-grades", {
+            "sourceName": "Nguồn sai",
+            "text": "mssv,diem_10\n123,8\n",
+        })
+        self.assertEqual(invalid.status_code, 400, invalid.get_json())
+        still_present = pdt.get("/api/admin/grades").get_json()["referenceSources"]
+        self.assertEqual(still_present[0]["label"], "Nguồn tham chiếu kiểm thử")
+
+        sv = self.login("221121521101")
+        forbidden = self.post(sv, "/api/admin/reference-grades", {"text": source_csv})
+        self.assertEqual(forbidden.status_code, 403)
 
     def test_csrf_bat_buoc(self):
         sv = self.login("221121521101")

@@ -4,11 +4,11 @@ Test case nghiệp vụ, ngoại lệ, API và hạ tầng
 Hệ thống xét duyệt và cấp phát bảng điểm (TO-BE)
 Ngày lập: 06/11/2026
 
-Tổng số test case	46
-Nghiệp vụ/quy trình	24 (TC01-TC23, TC45)
-API/xác thực	12 (TC24-TC34, TC46)
+Tổng số test case	50
+Nghiệp vụ/quy trình	27 (TC01-TC23, TC45, TC47-TC49)
+API/xác thực	13 (TC24-TC34, TC46, TC50)
 Lưu trữ/triển khai/ký số	10 (TC35-TC44)
-Tự động hóa	Python unittest; bao gồm 6 test nghiệp vụ bổ sung mới
+Tự động hóa	Python unittest; bao gồm 10 test nghiệp vụ/phân quyền bổ sung
 
 1. Mục tiêu và cách sử dụng
 Tài liệu mô tả luồng chính, nhánh nghiệp vụ, tình huống ngoại lệ và kiểm tra API/hạ tầng của quy trình cấp bảng điểm.
@@ -373,8 +373,8 @@ TC45 - Hỗ trợ Khoa rà soát điểm theo luật cục bộ, chỉ đọc
 Nhóm	Rà soát điểm
 Loại	Nghiệp vụ
 Tiền điều kiện	Kết quả đối chiếu có lỗi D3, cảnh báo A1 và ghi chú I1.
-Các bước / dữ liệu	Gọi hàm tạo gợi ý rà soát với kết quả kiểm tra; lưu lại dữ liệu đầu vào trước khi gọi.
-Kết quả mong đợi	Tạo findings đúng mức độ và mã luật; đánh dấu phương pháp local-rules, readOnly và humanDecisionRequired; dữ liệu đầu vào không bị thay đổi. Gợi ý A1 nêu rõ đây chưa phải bằng chứng điểm sai và Khoa phải tự đối chiếu nguồn chính thức; công cụ không tự sửa dữ liệu.
+Các bước / dữ liệu	Gọi hàm tạo gợi ý với kết quả luật hiện có; lưu dữ liệu đầu vào trước khi gọi.
+Kết quả mong đợi	Tạo findings đúng mức độ/mã luật; đánh dấu readOnly và humanDecisionRequired; dữ liệu đầu vào không đổi. Gợi ý A1 nói rõ chưa chứng minh điểm sai; không gọi LLM/dịch vụ ngoài và không tự sửa dữ liệu.
 Tự động hóa	Có - unittest
 
 TC46 - Chỉ Khoa đang xử lý mới nhận gợi ý rà soát điểm
@@ -382,7 +382,39 @@ Nhóm	Phân quyền API
 Loại	Ngoại lệ truy cập
 Tiền điều kiện	Có yêu cầu thuộc quyền Khoa và đang ở trạng thái CHO_KHOA.
 Các bước / dữ liệu	Khoa lấy chi tiết yêu cầu; sau đó Phòng Đào tạo lấy cùng chi tiết yêu cầu.
-Kết quả mong đợi	API trả reviewAssistant cho Khoa với cờ chỉ đọc và cần quyết định của con người; response của Phòng Đào tạo không có trường reviewAssistant.
+Kết quả mong đợi	API trả reviewAssistant, so sánh nguồn và bản nháp cho Khoa; response của Phòng Đào tạo không có trường reviewAssistant.
+Tự động hóa	Có - unittest
+
+TC47 - So sánh điểm hiện tại với nguồn tham chiếu riêng
+Nhóm	Đối chiếu nhiều nguồn
+Loại	Nghiệp vụ
+Tiền điều kiện	Có dòng điểm vận hành và nguồn tham chiếu cùng MSSV, năm học, học kỳ, mã học phần nhưng khác điểm số/điểm chữ.
+Các bước / dữ liệu	Khoa mở chi tiết yêu cầu đang CHO_KHOA.
+Kết quả mong đợi	Giao diện nêu rõ giá trị hiện tại và giá trị tham chiếu theo từng trường; không coi nguồn DEMO là dữ liệu chính thức.
+Tự động hóa	Có - unittest
+
+TC48 - Phát hiện dòng chỉ xuất hiện ở một nguồn
+Nhóm	Ngoại lệ - đối chiếu nguồn
+Loại	Nghiệp vụ
+Tiền điều kiện	Một dòng chỉ có trong nguồn tham chiếu hoặc chỉ có trong CSDL điểm hiện tại.
+Các bước / dữ liệu	Chạy hàm so sánh trên hai tập dữ liệu.
+Kết quả mong đợi	Phân biệt missing_in_current và not_in_reference; nêu khả năng thiếu đồng bộ hoặc sai khóa nhận dạng như giả thuyết, không kết luận nguyên nhân.
+Tự động hóa	Có - unittest
+
+TC49 - Soạn nháp ghi chú nhưng không tự quyết định
+Nhóm	Hỗ trợ cán bộ
+Loại	Nghiệp vụ
+Tiền điều kiện	Có sai khác giữa nguồn điểm hiện tại và nguồn tham chiếu.
+Các bước / dữ liệu	Khoa xem nháp, chỉnh sửa nếu cần, rồi tự chọn thao tác nghiệp vụ.
+Kết quả mong đợi	Nháp ghi rõ sai khác và nguyên nhân khả dĩ chưa xác nhận; nội dung chỉ được gửi khi cán bộ thực hiện quyết định; hàm phân tích không sửa điểm hay dữ liệu nguồn.
+Tự động hóa	Có - unittest
+
+TC50 - Nhập nguồn tham chiếu riêng, không ghi đè CSDL điểm
+Nhóm	Phân quyền / nhập dữ liệu nguồn
+Loại	Ngoại lệ API
+Tiền điều kiện	PĐT đăng nhập; tệp nguồn có đủ MSSV, năm học, học kỳ và mã học phần.
+Các bước / dữ liệu	PĐT nạp CSV tham chiếu; thử nạp tệp thiếu khóa bắt buộc; thử gọi API với vai trò không phải PĐT.
+Kết quả mong đợi	Nguồn tham chiếu được thay riêng; CSDL điểm vận hành không đổi. Tệp sai bị từ chối và nguồn cũ được giữ nguyên; vai trò khác bị 403.
 Tự động hóa	Có - unittest
 
 3. Phạm vi kiểm thử tự động

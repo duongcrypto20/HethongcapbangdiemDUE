@@ -4,6 +4,7 @@ Mỗi sinh viên mẫu được thiết kế để đi qua một nhánh khác nh
 """
 from __future__ import annotations
 
+import copy
 import time
 
 from . import engine as E
@@ -107,6 +108,9 @@ def build_data() -> dict:
     find("221121502102", "ECO1002").update(diem10=3.8, diemChu="F")
     grades.append({"mssv": "221121502102", "namHoc": "2023-2024", "hocKy": "HK1", "maHP": "ECO1002", "tenHP": "Kinh tế vĩ mô",
                    "soTC": 3, "diem10": 6.6, "diemChu": "C+"})
+
+    reference_grades = copy.deepcopy(grades)
+
     # Hân: thiếu điểm Lập trình web
     find("221121521103", "MIS3003").update(diem10=None, diemChu="")
     # Khang: điểm chữ sai
@@ -115,7 +119,7 @@ def build_data() -> dict:
     grades.append({**find("221121502105", "MKT2001"), "diem10": 6.0, "diemChu": "C"})
     # Nam: một điểm lệch rất xa điểm TB
     find("221121502106", "MGT3002").update(diem10=3.0, diemChu="F")
-    return {"students": students, "grades": grades, "scenarios": scenarios}
+    return {"students": students, "grades": grades, "referenceGrades": reference_grades, "scenarios": scenarios}
 
 
 def form_of(st: dict, **extra) -> dict:
@@ -130,6 +134,8 @@ def load_reference_data(db: E.Db) -> None:
     data = build_data()
     E.import_students(db, data["students"], "replace")
     E.import_grades(db, data["grades"], "replace")
+    db.gradeSources = [{"id": "demo_seed_v1", "label": "Nguồn tham chiếu demo (sinh tự động)", "kind": "demo"}]
+    db.referenceGrades = [{"sourceId": "demo_seed_v1", **grade} for grade in data["referenceGrades"]]
     db.logs = []
 
 

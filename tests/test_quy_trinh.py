@@ -169,12 +169,70 @@ class DoiChieuVaKhoa(unittest.TestCase):
         result = E.grade_review_assistance(check)
 
         self.assertEqual(check, original)
-        self.assertEqual(result["method"], "local-rules")
+        self.assertEqual(result["method"], "local-rules-and-source-comparison")
         self.assertTrue(result["readOnly"])
         self.assertTrue(result["humanDecisionRequired"])
         self.assertEqual([item["severity"] for item in result["findings"]], ["error", "warning", "info"])
         self.assertIn("không chứng minh điểm sai", result["findings"][1]["suggestion"])
         self.assertIn("không tự sửa dữ liệu", result["limitations"])
+
+    def test_grade_review_compares_reference_scores_and_drafts_hypotheses(self):
+        current = [{
+            "id": "g1", "mssv": "123", "namHoc": "2025-2026", "hocKy": "HK1", "maHP": "MIS1001",
+            "tenHP": "Tin học", "soTC": 3, "diem10": 4.0, "diemChu": "D",
+        }]
+        references = [{
+            "sourceId": "official", "mssv": "123", "namHoc": "2025-2026", "hocKy": "HK1", "maHP": "MIS1001",
+            "tenHP": "Tin học", "soTC": 3, "diem10": 8.0, "diemChu": "B",
+        }]
+        current_before, references_before = copy.deepcopy(current), copy.deepcopy(references)
+
+        result = E.grade_review_assistance(
+            {"errors": [], "warnings": [], "infos": []},
+            current,
+            [{"id": "official", "label": "Nguồn chính thức", "kind": "imported"}],
+            references,
+        )
+
+        comparison = result["sourceComparisons"][0]
+        self.assertEqual(comparison["differenceCount"], 1)
+        self.assertEqual(comparison["differences"][0]["kind"], "mismatch")
+        self.assertEqual(
+            {item["field"] for item in comparison["differences"][0]["differences"]},
+            {"diem10", "diemChu"},
+        )
+        self.assertTrue(comparison["differences"][0]["likelyCauses"])
+        self.assertIn("BẢN NHÁP", result["draftNote"])
+        self.assertIn("chưa phải kết luận", result["draftNote"])
+        self.assertTrue(result["readOnly"])
+        self.assertEqual(current, current_before)
+        self.assertEqual(references, references_before)
+
+    def test_grade_review_reports_missing_and_unreferenced_rows(self):
+        current = [{
+            "mssv": "123", "namHoc": "2025-2026", "hocKy": "HK1", "maHP": "LOCAL",
+            "diem10": 7, "diemChu": "B", "soTC": 3, "tenHP": "Môn nội bộ",
+        }]
+        references = [{
+            "sourceId": "source", "mssv": "123", "namHoc": "2025-2026", "hocKy": "HK1", "maHP": "SOURCE",
+            "diem10": 8, "diemChu": "B", "soTC": 3, "tenHP": "Môn nguồn",
+        }]
+
+        result = E.grade_review_assistance(
+            {"errors": [], "warnings": [], "infos": []},
+            current,
+            [{"id": "source", "label": "Nguồn", "kind": "imported"}],
+            references,
+        )
+
+        self.assertEqual(
+            {item["kind"] for item in result["sourceComparisons"][0]["differences"]},
+            {"not_in_reference", "missing_in_current"},
+        )
+
+    def test_reference_grade_import_rejects_incomplete_identity(self):
+        with self.assertRaisesRegex(E.ProcessError, "Nguồn cũ chưa bị thay đổi"):
+            E.normalize_reference_grades([{"mssv": "123", "diem_10": 8}])
 
     def test_tc04_thieu_diem_khoa_hieu_chinh(self):
         """TC04 g_diem(Không) → t_khoa → g_kh(Có) → g_mdc → t_doichieu → g_diem(Có) → t_tao"""

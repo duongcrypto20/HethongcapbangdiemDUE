@@ -23,7 +23,7 @@
   const ui = {
     route: 'home', tab: {}, open: null, dtab: 'overview', zoom: 0.42, pzoom: 0.42, highlight: null,
     verify: '', verifyResult: null, tests: null, confirm: null, filter: '', statusFilter: '',
-    importText: { students: '', grades: '', requests: '' }, bulkResult: null, gradeFilter: '', adminGrades: null,
+    importText: { students: '', grades: '', 'reference-grades': '', requests: '' }, bulkResult: null, gradeFilter: '', adminGrades: null,
   };
 
   /* ------------------------------ Tiện ích ------------------------------ */
@@ -540,7 +540,12 @@
     grades() {
       const g = ui.adminGrades;
       if (!g) { loadAdminGrades(); return '<div class="empty">Đang tải CSDL điểm…</div>'; }
-      return importPanel('grades', 'Nhập CSDL điểm', 'Cột: mssv, nam_hoc, hoc_ky, ma_hp, ten_hp, so_tc, diem_10, diem_chu. Chế độ "gộp" thay toàn bộ điểm của các MSSV có trong tệp.') +
+      const sourceRows = g.referenceSources || [];
+      return `<section class="panel"><div class="title">Nguồn tham chiếu để đối chiếu</div>
+        <p style="margin-top:0">Nguồn này được lưu tách biệt với CSDL điểm đang vận hành và chỉ dùng đọc khi Khoa rà soát. Nguồn demo được sinh tự động, <b>không phải dữ liệu chính thức</b>. PĐT có thể thay bằng tệp nguồn đã được phê duyệt; thao tác này không sửa CSDL điểm vận hành.</p>
+        ${sourceRows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>Nguồn</th><th>Loại</th><th class="r">Số dòng</th></tr></thead><tbody>${sourceRows.map((source) => `<tr><td>${esc(source.label)}</td><td>${source.kind === 'demo' ? '<span class="pill warn">DEMO · tổng hợp</span>' : '<span class="pill ok">Đã nhập</span>'}</td><td class="r num">${source.rowCount}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Chưa có nguồn tham chiếu.</div>'}</section>` +
+        importPanel('reference-grades', 'Nạp nguồn tham chiếu riêng', 'Cột bắt buộc: mssv, nam_hoc, hoc_ky, ma_hp; cột so_tc, diem_10, diem_chu, ten_hp được đối chiếu nếu có. Nạp nguồn mới sẽ thay toàn bộ nguồn tham chiếu hiện tại, không thay CSDL điểm vận hành.', { sourceName: true, mode: false, submitLabel: 'Thay nguồn tham chiếu' }) +
+        importPanel('grades', 'Nhập CSDL điểm đang vận hành', 'Cột: mssv, nam_hoc, hoc_ky, ma_hp, ten_hp, so_tc, diem_10, diem_chu. Chế độ "gộp" thay toàn bộ điểm của các MSSV có trong tệp.') +
         `<section class="panel"><div class="title">CSDL điểm <span class="sub">${g.total} dòng · <a href="/api/admin/export/grades.csv">Xuất CSV</a></span></div>
         <form class="btns" data-form="grade-filter" style="margin-bottom:10px"><select name="mssv" aria-label="Sinh viên" style="padding:7px 10px;border:1px solid var(--line);border-radius:4px;background:var(--surface);max-width:100%"><option value="">Tất cả sinh viên</option>${app.state.students.map((s) => `<option value="${s.mssv}" ${ui.gradeFilter === s.mssv ? 'selected' : ''}>${s.mssv} · ${esc(s.hoTen)}</option>`).join('')}</select><button class="btn" type="submit">Lọc</button></form>
         <div class="table-wrap" style="max-height:520px"><table class="grid"><thead><tr><th>MSSV</th><th>Năm học</th><th>HK</th><th>Mã HP</th><th>Tên học phần</th><th class="r">TC</th><th class="r">Điểm</th><th>Chữ</th></tr></thead><tbody>${g.grades.map((x) => `<tr><td class="mono">${x.mssv}</td><td>${esc(x.namHoc)}</td><td>${esc(x.hocKy)}</td><td class="mono">${esc(x.maHP)}</td><td>${esc(x.tenHP)}</td><td class="r num">${x.soTC ?? ''}</td><td class="r num">${x.diem10 ?? '<span class="pill bad">trống</span>'}</td><td>${esc(x.diemChu)}</td></tr>`).join('')}</tbody></table></div></section>`;
@@ -587,13 +592,17 @@
       if (ui.route === 'he-thong') render();
     } catch (e) { toast(e.message, 'err'); }
   }
-  function importPanel(kind, title, help) {
+  function importPanel(kind, title, help, options = {}) {
+    const sourceName = options.sourceName
+      ? '<div class="field"><label for="source-name">Tên nguồn dữ liệu</label><input id="source-name" name="sourceName" value="Nguồn điểm tham chiếu đã phê duyệt" maxlength="120"></div>'
+      : '';
+    const mode = options.mode === false ? '' : '<select name="mode" aria-label="Chế độ nhập" style="padding:7px 10px;border:1px solid var(--line);border-radius:4px;background:var(--surface)"><option value="merge">Gộp vào dữ liệu hiện có</option><option value="replace">Thay thế toàn bộ</option></select>';
     return `<section class="panel"><div class="title">${esc(title)}</div><p style="margin-top:0;font-size:13px">${esc(help)} Dấu phân cách: phẩy, chấm phẩy hoặc tab; tiêu đề tiếng Việt có dấu được chấp nhận. Có thể dán JSON dạng mảng.</p>
       <form class="stack" data-form="import" data-kind="${kind}">
+        ${sourceName}
         <div class="field"><label for="imp-${kind}">Nội dung CSV hoặc JSON</label><textarea id="imp-${kind}" name="text" class="mono" rows="5" style="min-height:110px">${esc(ui.importText[kind])}</textarea></div>
         <div class="btns"><input type="file" accept=".csv,.json,.txt" data-file="${kind}" aria-label="Chọn tệp">
-          <select name="mode" aria-label="Chế độ nhập" style="padding:7px 10px;border:1px solid var(--line);border-radius:4px;background:var(--surface)"><option value="merge">Gộp vào dữ liệu hiện có</option><option value="replace">Thay thế toàn bộ</option></select>
-          <button class="btn primary" type="submit">Nhập</button></div>
+          ${mode}<button class="btn primary" type="submit">${esc(options.submitLabel || 'Nhập')}</button></div>
       </form></section>`;
   }
 
@@ -760,13 +769,23 @@
     const live = app.detail.liveCheck;
     const assistant = app.detail.reviewAssistant;
     const rows = app.detail.grades || [];
+    const sourceReview = assistant?.sourceComparisons || [];
     const flagged = {};
     for (const e of live.errors) if (e.gradeId) flagged[e.gradeId] = 'err';
     for (const w of live.warnings) if (w.gradeId && !flagged[w.gradeId]) flagged[w.gradeId] = 'warnrow';
     const show = rows.filter((r) => flagged[r.id]).concat(rows.filter((r) => !flagged[r.id]));
     return box('Rà soát & hiệu chỉnh điểm', `
-      ${assistant ? `<div class="callout info grade-assistant"><b>Hỗ trợ rà soát theo luật cục bộ</b><div>${esc(assistant.summary)}</div>
+      ${assistant ? `<div class="callout info grade-assistant"><b>Hỗ trợ rà soát theo luật và nguồn tham chiếu</b><div>${esc(assistant.summary)}</div>
         ${assistant.findings.length ? `<ul>${assistant.findings.map((item) => `<li><b>${esc(item.code)}</b> ${esc(item.message)}<br><span class="muted">Gợi ý: ${esc(item.suggestion)}</span></li>`).join('')}</ul>` : '<p>Không phát hiện vấn đề theo các luật hiện có.</p>'}
+        ${sourceReview.map((source) => `<section><b>Đối chiếu: ${esc(source.sourceName)}</b>
+          ${source.sourceKind === 'demo' ? '<p class="muted">Nguồn demo tổng hợp để thử nghiệm, không phải dữ liệu chính thức.</p>' : ''}
+          ${source.differences.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>Học phần / kỳ</th><th>Sai khác quan sát được</th><th>Nguyên nhân khả dĩ (chưa xác nhận)</th></tr></thead><tbody>${source.differences.map((difference) => `<tr>
+            <td><span class="mono">${esc(difference.maHP)}</span><br>${esc(difference.hocKy)} ${esc(difference.namHoc)}</td>
+            <td>${difference.differences.length ? difference.differences.map((field) => `<div><b>${esc(field.label)}:</b> hiện tại ${esc(field.current ?? 'trống')} · tham chiếu ${esc(field.reference ?? 'trống')}</div>`).join('') : esc(difference.kind === 'missing_in_current' ? 'Có trong nguồn tham chiếu, chưa có trong CSDL điểm hiện tại' : 'Có trong CSDL điểm hiện tại, không có khóa tương ứng ở nguồn tham chiếu')}</td>
+            <td><ul>${difference.likelyCauses.map((cause) => `<li>${esc(cause)}</li>`).join('')}</ul></td>
+          </tr>`).join('')}</tbody></table></div>` : '<p>Không phát hiện sai khác giữa các dòng có cùng MSSV, học kỳ và mã học phần.</p>'}
+        </section>`).join('')}
+        <div class="field"><label for="khoa-note">Bản nháp ghi chú — cán bộ cần kiểm tra/chỉnh sửa trước khi gửi</label><textarea id="khoa-note">${esc(assistant.draftNote)}</textarea></div>
         <p class="muted">${esc(assistant.limitations)}</p><p><b>Khoa tự đối chiếu nguồn điểm và quyết định; công cụ này chỉ đọc, không tự sửa điểm.</b></p></div>` : ''}
       <div class="callout ${live.pass ? 'ok' : 'warn'}">Kiểm tra lại theo dữ liệu hiện tại: <b>${live.errors.length} lỗi, ${live.warnings.length} bất thường</b>, độ tin cậy ${Math.round(live.confidence * 100)}% (ngưỡng ${Math.round(live.threshold * 100)}%). ${live.pass ? 'Đã đủ điều kiện, bấm "Đã hiệu chỉnh xong".' : 'Sửa các dòng tô màu hoặc xác nhận điểm bất thường.'}</div>
       ${live.errors.length ? `<ul class="checks">${live.errors.map((e) => `<li><span class="ic bad">✕</span><span><b class="mono">${e.code}</b> ${esc(e.msg)}</span></li>`).join('')}</ul>` : ''}
@@ -778,7 +797,7 @@
         <td><input aria-label="Điểm chữ" data-k="diemChu" value="${esc(g.diemChu)}" style="width:48px"></td>
         <td style="white-space:nowrap"><button class="btn small" data-action="khoa-save" data-gid="${g.id}">Lưu</button> ${live.errors.some((e) => e.gradeId === g.id && e.code === 'D5') ? `<button class="btn small danger" data-action="khoa-del" data-gid="${g.id}">Xóa dòng trùng</button>` : ''}</td></tr>`).join('')}</tbody></table></div>
         <p class="muted" style="margin:0;font-size:12px">"Lưu" ghi thẳng vào CSDL điểm kèm nhật ký kiểm toán. Để trống ô "Chữ" thì hệ thống tự quy đổi từ điểm số.</p>` : '<div class="empty">Sinh viên không có dòng điểm nào trong CSDL điểm.</div>'}
-      <div class="field"><label for="khoa-note">Ghi chú / lý do</label><textarea id="khoa-note" placeholder="Ví dụ: đã đối chiếu bảng điểm gốc của giảng viên"></textarea></div>
+      ${assistant ? '' : '<div class="field"><label for="khoa-note">Ghi chú / lý do</label><textarea id="khoa-note" placeholder="Ví dụ: đã đối chiếu bảng điểm gốc của giảng viên"></textarea></div>'}
       <div class="btns"><button class="btn primary" data-action="khoa-decide" data-yes="1">Đã hiệu chỉnh xong, đối chiếu lại</button><button class="btn danger" data-action="khoa-decide" data-yes="0">Không hiệu chỉnh được, từ chối cấp</button></div>`);
   }
 
@@ -920,8 +939,17 @@
     async import(fd, form) {
       const kind = form.dataset.kind;
       ui.importText[kind] = String(fd.get('text') || '');
-      const r = await act('POST', '/api/admin/import/' + kind, { text: ui.importText[kind], mode: fd.get('mode') },
-        (x) => (kind === 'students' ? `Đã nhập: thêm ${x.result.added}, cập nhật ${x.result.updated}, bỏ qua ${x.result.skipped}` : `Đã nhập ${x.result.added} dòng điểm, bỏ qua ${x.result.skipped}`));
+      let r;
+      if (kind === 'reference-grades') {
+        if (!window.confirm('Thay toàn bộ nguồn tham chiếu hiện tại? CSDL điểm vận hành không bị thay đổi.')) return;
+        r = await act('POST', '/api/admin/reference-grades', {
+          text: ui.importText[kind],
+          sourceName: fd.get('sourceName'),
+        }, (x) => `Đã thay nguồn tham chiếu bằng ${x.result.added} dòng (${x.result.sourceName})`);
+      } else {
+        r = await act('POST', '/api/admin/import/' + kind, { text: ui.importText[kind], mode: fd.get('mode') },
+          (x) => (kind === 'students' ? `Đã nhập: thêm ${x.result.added}, cập nhật ${x.result.updated}, bỏ qua ${x.result.skipped}` : `Đã nhập ${x.result.added} dòng điểm, bỏ qua ${x.result.skipped}`));
+      }
       if (r) { ui.importText[kind] = ''; ui.adminGrades = null; render(); }
     },
     async bulk(fd) {

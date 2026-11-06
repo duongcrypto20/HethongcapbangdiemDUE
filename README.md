@@ -40,14 +40,15 @@ Trang đăng nhập liệt kê sẵn các tài khoản demo và kịch bản ki�
 python -m unittest discover -s tests -v
 ```
 
-- `tests/test_quy_trinh.py`: 19 kịch bản, mỗi kịch bản đi một nhánh BPMN (5 cổng XOR, cổng bao hàm, 3 timer, nhánh lỗi truy xuất, event sub-process SV hủy, ký số, tính GPA).
-- `tests/test_api.py`: 9 kiểm thử API (đăng nhập, khóa sau 5 lần sai, phân quyền theo làn, CSRF, lưu bền vững sau khởi động lại, tra cứu chữ ký, nhập CSV).
+- `tests/test_quy_trinh.py`: kiểm thử các nhánh BPMN, luật điểm, ký số, GPA và rà soát so sánh nguồn.
+- `tests/test_api.py`: kiểm thử đăng nhập, phân quyền, CSRF, lưu bền vững, API và nhập nguồn tham chiếu.
+- `tests/test_turso_store.py`: kiểm thử giao dịch và lưu trữ SQLite/Turso, cấu hình triển khai.
 
 Phòng Đào tạo cũng chạy được bộ kịch bản quy trình ngay trên web: **Hệ thống & dữ liệu › Kiểm thử tự động**.
 
 ## Hỗ trợ Khoa rà soát điểm
 
-Khi yêu cầu cần Khoa xử lý, màn hình chi tiết hiển thị gợi ý đọc-chỉ dựa trên các luật đối chiếu điểm D0-D7, A1 và I1 hiện có. Đây là hỗ trợ theo luật cục bộ, không kết nối mô hình AI/LLM hay gửi dữ liệu ra dịch vụ ngoài; hệ thống cũng không đọc được sổ điểm gốc nên không thể kết luận nguyên nhân hoặc tự hiệu chỉnh. Khoa phải tự đối chiếu nguồn chính thức và quyết định mọi thao tác sửa điểm.
+Khi yêu cầu cần Khoa xử lý, màn hình chi tiết hiển thị luật D0-D7/A1/I1, so sánh các dòng điểm với một nguồn tham chiếu được lưu tách biệt, nêu sai khác và nguyên nhân khả dĩ theo mẫu luật, rồi tạo nháp ghi chú để Khoa xem lại. Không dùng LLM/API AI bên ngoài. Nguồn ban đầu là dữ liệu tổng hợp phục vụ demo, không phải dữ liệu chính thức; PĐT có thể thay nguồn này bằng CSV đã được phê duyệt trong **Hệ thống & dữ liệu › CSDL điểm › Nạp nguồn tham chiếu riêng**. Phân tích chỉ đọc, không tự sửa điểm; nguyên nhân chỉ là giả thuyết, Khoa phải đối chiếu hồ sơ chính thức và quyết định.
 
 ## Kịch bản demo nhanh
 

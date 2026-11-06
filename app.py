@@ -100,6 +100,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         database_url=os.environ.get("TURSO_DATABASE_URL"),
         auth_token=os.environ.get("TURSO_AUTH_TOKEN"),
     )
+    store.ensure_demo_grade_reference()
     signer = Signer(cfg["KEY_DIR"])
     mailer = Mailer()
     flows = bpmn.parse_flows(ROOT / "bpmn" / "BPMN_TO_BE_NHOM5_da_sua.bpmn")
@@ -406,7 +407,9 @@ def create_app(test_config: dict | None = None) -> Flask:
                 out["grades"] = rows
                 out["liveCheck"] = E.check_grades(db, req["form"]["mssv"], req["acks"])
                 if g.user["role"] == "KHOA" and req["status"] == "CHO_KHOA":
-                    out["reviewAssistant"] = E.grade_review_assistance(out["liveCheck"])
+                    out["reviewAssistant"] = E.grade_review_assistance(
+                        out["liveCheck"], rows, db.gradeSources, db.referenceGrades
+                    )
                 out["terms"] = list(dict.fromkeys(f"{r['hocKy']} {r['namHoc']}" for r in
                                                   sorted(rows, key=lambda r: (E.term_order(r), r["maHP"]))))
             return out
@@ -573,6 +576,22 @@ def create_app(test_config: dict | None = None) -> Flask:
             return {"result": res}
         return run(f)
 
+    @app.post("/api/admin/reference-grades")
+    @auth("PDT")
+    def import_reference_grades():
+        d = body()
+
+        def f(db):
+            rows = E.normalize_reference_grades(parse_any(str(d.get("text", "")), "grades"))
+            label = E.norm_space(d.get("sourceName")) or "Nguồn tham chiếu do PĐT nhập"
+            if len(label) > 120:
+                raise E.ProcessError("Tên nguồn tham chiếu tối đa 120 ký tự.", 400)
+            store.replace_grade_reference(db.store_connection, label, rows, E.now(db))
+            E.sys_log(db, "audit", f"Thay nguồn tham chiếu điểm: {label} ({len(rows)} dòng)", None,
+                      g.user["full_name"])
+            return {"result": {"added": len(rows), "sourceName": label}}
+        return run(f)
+
     @app.post("/api/admin/bulk")
     @auth("PDT")
     def bulk():
@@ -610,7 +629,20 @@ def create_app(test_config: dict | None = None) -> Flask:
     @auth("PDT")
     def admin_grades():
         mssv = request.args.get("mssv", "")
-        return run(lambda db: {"grades": [x for x in db.grades if not mssv or x["mssv"] == mssv][:600], "total": len(db.grades)},
+        def f(db):
+            sources = [
+                {
+                    **source,
+                    "rowCount": sum(1 for grade in db.referenceGrades if grade["sourceId"] == source["id"]),
+                }
+                for source in db.gradeSources
+            ]
+            return {
+                "grades": [x for x in db.grades if not mssv or x["mssv"] == mssv][:600],
+                "total": len(db.grades),
+                "referenceSources": sources,
+            }
+        return run(f,
                    write=False)
 
     @app.get("/api/admin/export/<kind>.csv")

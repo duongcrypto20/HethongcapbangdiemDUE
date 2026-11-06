@@ -66,6 +66,8 @@ class Db:
         self.config: dict = copy.deepcopy(DEFAULT_CONFIG)
         self.students: list[dict] = []
         self.grades: list[dict] = []
+        self.gradeSources: list[dict] = []
+        self.referenceGrades: list[dict] = []
         self.requests: list[dict] = []
         self.outbox: list[dict] = []
         self.logs: list[dict] = []
@@ -349,6 +351,36 @@ def import_grades(db: Db, rows: list[dict], mode: str = "merge") -> dict:
     return {"added": len(out), "skipped": skipped}
 
 
+def normalize_reference_grades(rows: list[dict]) -> list[dict]:
+    """Validate and normalize a separately imported source without changing operational grades."""
+    if not rows:
+        raise ProcessError("Nguồn tham chiếu không có dòng điểm.", 400)
+    normalized = []
+    invalid_rows = []
+    for index, raw in enumerate(rows, 1):
+        grade = {
+            "mssv": norm_space(_pick(raw, "mssv", "ma_sv", "ma_sinh_vien")),
+            "namHoc": norm_space(_pick(raw, "namHoc", "nam_hoc", "namhoc")),
+            "hocKy": norm_space(_pick(raw, "hocKy", "hoc_ky", "hocky")),
+            "maHP": norm_space(_pick(raw, "maHP", "ma_hp", "ma_hoc_phan")).upper(),
+            "tenHP": norm_space(_pick(raw, "tenHP", "ten_hp", "ten_hoc_phan")),
+            "soTC": to_num(_pick(raw, "soTC", "so_tc", "tin_chi", default=None)),
+            "diem10": parse_score(_pick(raw, "diem10", "diem_10", "diem", default=None)),
+            "diemChu": norm_space(_pick(raw, "diemChu", "diem_chu")).upper(),
+        }
+        if not all(grade[key] for key in ("mssv", "namHoc", "hocKy", "maHP")):
+            invalid_rows.append(index)
+        normalized.append(grade)
+    if invalid_rows:
+        sample = ", ".join(str(index) for index in invalid_rows[:10])
+        more = "…" if len(invalid_rows) > 10 else ""
+        raise ProcessError(
+            f"Thiếu MSSV, năm học, học kỳ hoặc mã học phần ở dòng: {sample}{more}. Nguồn cũ chưa bị thay đổi.",
+            400,
+        )
+    return normalized
+
+
 # ---------------------------------------------------------------------------
 # Quy trình
 # ---------------------------------------------------------------------------
@@ -587,8 +619,198 @@ def check_grades(db: Db, mssv: str, acks: list[str] | None = None) -> dict:
             "confidence": confidence, "threshold": cfg["confidenceThreshold"], "pass": passed}
 
 
-def grade_review_assistance(check: dict) -> dict:
-    """Create read-only review suggestions from existing deterministic grade checks."""
+def _grade_source_key(row: dict) -> tuple[str, str, str, str]:
+    return (
+        norm_space(row.get("mssv")).casefold(),
+        norm_space(row.get("namHoc", row.get("nam_hoc"))).casefold(),
+        norm_space(row.get("hocKy", row.get("hoc_ky"))).casefold(),
+        norm_space(row.get("maHP", row.get("ma_hp"))).upper(),
+    )
+
+
+def _grade_source_value(field: str, row: dict) -> Any:
+    value = row.get(field)
+    if field == "soTC":
+        value = row.get("soTC", row.get("so_tc"))
+        parsed = to_num(value)
+        return parsed if parsed is not None else norm_space(value)
+    if field == "diem10":
+        value = row.get("diem10", row.get("diem_10"))
+        return parse_score(value)
+    if field == "diemChu":
+        value = row.get("diemChu", row.get("diem_chu"))
+        return norm_space(value).upper()
+    if field == "tenHP":
+        value = row.get("tenHP", row.get("ten_hp"))
+        return norm_space(value).casefold()
+    return value
+
+
+def _grade_source_raw(row: dict, field: str):
+    snake_case = {
+        "tenHP": "ten_hp",
+        "soTC": "so_tc",
+        "diem10": "diem_10",
+        "diemChu": "diem_chu",
+    }
+    return row[field] if field in row else row.get(snake_case[field])
+
+
+def compare_grade_sources(current: list[dict], sources: list[dict], references: list[dict]) -> list[dict]:
+    """Compare operational grades with separately stored reference sources without mutation."""
+    current_by_key: dict[tuple[str, str, str, str], list[dict]] = {}
+    for row in current:
+        current_by_key.setdefault(_grade_source_key(row), []).append(row)
+
+    references_by_source: dict[str, dict[tuple[str, str, str, str], list[dict]]] = {}
+    for row in references:
+        source_id = str(row.get("sourceId", row.get("source_id", "")))
+        grouped = references_by_source.setdefault(source_id, {})
+        grouped.setdefault(_grade_source_key(row), []).append(row)
+
+    source_results = []
+    field_labels = {
+        "tenHP": "tên học phần",
+        "soTC": "số tín chỉ",
+        "diem10": "điểm hệ 10",
+        "diemChu": "điểm chữ",
+    }
+    for source in sources:
+        source_id = str(source.get("id", source.get("sourceId", "")))
+        reference_by_key = references_by_source.get(source_id, {})
+        differences = []
+        for key in sorted(set(current_by_key) | set(reference_by_key)):
+            current_rows = current_by_key.get(key, [])
+            reference_rows = reference_by_key.get(key, [])
+            identity_row = (current_rows or reference_rows)[0]
+            course = {
+                "mssv": identity_row.get("mssv", ""),
+                "namHoc": identity_row.get("namHoc", identity_row.get("nam_hoc", "")),
+                "hocKy": identity_row.get("hocKy", identity_row.get("hoc_ky", "")),
+                "maHP": identity_row.get("maHP", identity_row.get("ma_hp", "")),
+            }
+            paired = min(len(current_rows), len(reference_rows))
+            for index in range(paired):
+                current_row, reference_row = current_rows[index], reference_rows[index]
+                fields = []
+                for field, label in field_labels.items():
+                    current_value = _grade_source_value(field, current_row)
+                    reference_value = _grade_source_value(field, reference_row)
+                    if current_value != reference_value:
+                        fields.append({
+                            "field": field,
+                            "label": label,
+                            "current": _grade_source_raw(current_row, field),
+                            "reference": _grade_source_raw(reference_row, field),
+                        })
+                if fields:
+                    causes = []
+                    changed = {item["field"] for item in fields}
+                    if "diem10" in changed:
+                        causes.append("Có thể nhập/chép điểm chưa đúng hoặc nguồn điểm chưa đồng bộ.")
+                    if "diemChu" in changed:
+                        causes.append("Có thể áp dụng khác quy tắc quy đổi hoặc nhập nhầm điểm chữ.")
+                    if changed & {"tenHP", "soTC"}:
+                        causes.append("Có thể ánh xạ sai danh mục học phần hoặc số tín chỉ.")
+                    differences.append({
+                        **course,
+                        "kind": "mismatch",
+                        "differences": fields,
+                        "likelyCauses": causes,
+                    })
+            if len(current_rows) > paired:
+                for _ in current_rows[paired:]:
+                    differences.append({
+                        **course,
+                        "kind": "not_in_reference",
+                        "differences": [],
+                        "likelyCauses": [
+                            "Dòng hiện tại không có bản ghi tương ứng trong nguồn này; có thể sai MSSV, học kỳ, mã học phần hoặc nguồn tham chiếu chưa đầy đủ."
+                        ],
+                    })
+            if len(reference_rows) > paired:
+                for _ in reference_rows[paired:]:
+                    differences.append({
+                        **course,
+                        "kind": "missing_in_current",
+                        "differences": [],
+                        "likelyCauses": [
+                            "Nguồn tham chiếu có dòng điểm chưa thấy trong CSDL hiện tại; có thể dữ liệu chưa được nhập hoặc đồng bộ."
+                        ],
+                    })
+        source_results.append({
+            "sourceId": source_id,
+            "sourceName": source.get("label", source_id),
+            "sourceKind": source.get("kind", "unknown"),
+            "differences": differences,
+            "differenceCount": len(differences),
+        })
+    return source_results
+
+
+def _draft_review_note(source_results: list[dict], rule_findings: list[dict]) -> str:
+    all_differences = [
+        (source, difference)
+        for source in source_results
+        for difference in source["differences"]
+    ]
+    if not source_results:
+        return (
+            "Chưa có nguồn điểm tham chiếu để đối chiếu. Cần nạp nguồn được phê duyệt và kiểm tra trực tiếp "
+            "trước khi đưa ra kết luận."
+        )
+    if not all_differences and not rule_findings:
+        names = ", ".join(source["sourceName"] for source in source_results)
+        return (
+            f"Đã đối chiếu với {names}; chưa phát hiện sai khác theo dữ liệu và luật hiện có. "
+            "Kết quả không thay thế việc xác minh nguồn chính thức."
+        )
+
+    notes = []
+    for source, difference in all_differences[:5]:
+        values = ", ".join(
+            f"{field['label']}: hiện tại {field['current'] if field['current'] is not None else 'trống'}, "
+            f"tham chiếu {field['reference'] if field['reference'] is not None else 'trống'}"
+            for field in difference["differences"]
+        )
+        identity = f"{difference['maHP']} ({difference['hocKy']} {difference['namHoc']})"
+        detail = f"{identity}: {values}" if values else f"{identity}: bản ghi không khớp giữa hai nguồn"
+        notes.append(f"{source['sourceName']} — {detail}")
+    remainder = len(all_differences) - len(notes)
+    if remainder > 0:
+        notes.append(f"còn {remainder} sai khác khác")
+    if rule_findings and not notes:
+        notes.extend(
+            f"{item['code']}: {item['message']}"
+            for item in rule_findings[:5]
+        )
+    possible_causes = list(dict.fromkeys(
+        cause
+        for source in source_results
+        for difference in source["differences"]
+        for cause in difference["likelyCauses"]
+    ))
+    cause_note = (
+        " Nguyên nhân cần kiểm tra (chưa xác nhận): " + " ".join(possible_causes[:3])
+        if possible_causes else ""
+    )
+    return (
+        "BẢN NHÁP — cần cán bộ rà soát trước khi sử dụng. Qua đối chiếu, ghi nhận: "
+        + "; ".join(notes)
+        + "." + cause_note
+        + " Đây là dấu hiệu cần xác minh, chưa phải kết luận về nguyên nhân hoặc điểm đúng. "
+        "Đề nghị đối chiếu hồ sơ nguồn đã được phê duyệt, ghi nhận căn cứ và chỉ quyết định sau khi kiểm tra. "
+        "Công cụ không tự sửa dữ liệu."
+    )
+
+
+def grade_review_assistance(
+    check: dict,
+    current: list[dict] | None = None,
+    sources: list[dict] | None = None,
+    references: list[dict] | None = None,
+) -> dict:
+    """Create read-only rule guidance and source comparisons; never changes grade records."""
     guidance = {
         "D0": "Kiểm tra việc nhập đúng MSSV và xác nhận dữ liệu đã được đồng bộ từ nguồn điểm chính thức.",
         "D1": "Đối chiếu học phần với bảng điểm gốc để xác định điểm đang thiếu hay chưa được cập nhật.",
@@ -614,18 +836,23 @@ def grade_review_assistance(check: dict) -> dict:
                     code, "Đối chiếu thông tin với hồ sơ nguồn và áp dụng quy trình nghiệp vụ hiện hành."
                 ),
             })
+    source_results = compare_grade_sources(current or [], sources or [], references or [])
+    difference_count = sum(source["differenceCount"] for source in source_results)
     return {
-        "method": "local-rules",
+        "method": "local-rules-and-source-comparison",
         "readOnly": True,
         "humanDecisionRequired": True,
         "summary": (
             f"{len(check.get('errors', []))} lỗi, {len(check.get('warnings', []))} dấu hiệu cần xác minh, "
-            f"{len(check.get('infos', []))} ghi chú."
+            f"{len(check.get('infos', []))} ghi chú; {difference_count} sai khác với nguồn tham chiếu."
         ),
         "findings": findings,
+        "sourceComparisons": source_results,
+        "draftNote": _draft_review_note(source_results, findings),
         "limitations": (
-            "Gợi ý được tạo bằng luật D0-D7/A1/I1 từ CSDL hiện có; hệ thống không truy cập sổ điểm gốc, "
-            "không xác định nguyên nhân thay con người và không tự sửa dữ liệu."
+            "Đối chiếu dùng nguồn tham chiếu được nạp riêng. Nguồn DEMO là dữ liệu tổng hợp, không phải nguồn chính thức. "
+            "Nguyên nhân chỉ là giả thuyết theo mẫu sai khác; cán bộ phải kiểm tra nguồn gốc và tự quyết định. "
+            "Công cụ chỉ đọc, không tự sửa dữ liệu và không gọi dịch vụ AI/LLM bên ngoài."
         ),
     }
 
