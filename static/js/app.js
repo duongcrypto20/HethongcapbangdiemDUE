@@ -8,6 +8,11 @@
   const TZ = 'Asia/Ho_Chi_Minh';
   const DAY = 86400000, HOUR = 3600000;
   const ROLE_LABEL = { SV: 'Sinh viên', KHOA: 'Khoa', PDT: 'Phòng Đào tạo', PP: 'Phó phòng' };
+  const THEME_KEY = 'bangdiem-theme';
+  const savedTheme = (() => {
+    try { return localStorage.getItem(THEME_KEY); } catch (e) { console.warn('Không đọc được lựa chọn giao diện đã lưu.', e); return null; }
+  })();
+  document.documentElement.dataset.theme = savedTheme === 'dark' ? 'dark' : 'light';
 
   const app = {
     me: null, csrf: null, demo: null, demoMode: true,
@@ -49,6 +54,14 @@
     el.textContent = msg;
     $('#toasts').appendChild(el);
     setTimeout(() => el.remove(), kind === 'err' ? 6000 : 3800);
+  }
+  function themeButton() {
+    const dark = document.documentElement.dataset.theme === 'dark';
+    const label = dark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối';
+    const icon = dark
+      ? '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"></path></svg>'
+      : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.2 15.4A8.5 8.5 0 0 1 8.6 3.8 8.5 8.5 0 1 0 20.2 15.4Z"></path></svg>';
+    return `<button class="chip-btn theme-toggle" type="button" data-action="theme-toggle" aria-label="${label}" aria-pressed="${dark}" title="${label}">${icon}</button>`;
   }
 
   /* ------------------------------ Gọi API ------------------------------ */
@@ -123,7 +136,7 @@
   function renderChrome() {
     const right = $('#topbar-right');
     if (!app.me) {
-      right.innerHTML = '<a class="chip-btn" href="#tra-cuu" style="text-decoration:none">Tra cứu bảng điểm</a>';
+      right.innerHTML = '<a class="chip-btn" href="#tra-cuu" style="text-decoration:none">Tra cứu bảng điểm</a>' + themeButton();
       $('#nav').innerHTML = `<a href="#home" class="${ui.route !== 'tra-cuu' ? 'active' : ''}">Đăng nhập</a><a href="#tra-cuu" class="${ui.route === 'tra-cuu' ? 'active' : ''}">Tra cứu</a>`;
       $('#banner').innerHTML = '';
       return;
@@ -131,7 +144,7 @@
     const s = app.state;
     const off = s ? s.clockOffset : 0;
     right.innerHTML = `${s && app.demoMode ? `<span class="chip-btn" title="Đồng hồ hệ thống (có thể tua để thử các mốc thời gian)">${fmt(nowT())}${off ? ` · +${Math.round(off / HOUR)} giờ` : ''}</span><button class="chip-btn solid" data-action="advance" data-ms="${DAY}" title="Tua đồng hồ thêm 1 ngày để thử hủy tự động / nhắc việc">+1 ngày</button>` : ''}
-      <span class="who">${esc(app.me.full_name)}</span><span class="role">${ROLE_LABEL[app.me.role]}</span><button class="chip-btn" data-action="logout">Đăng xuất</button>`;
+      <span class="who">${esc(app.me.full_name)}</span><span class="role">${ROLE_LABEL[app.me.role]}</span><button class="chip-btn" data-action="logout">Đăng xuất</button>${themeButton()}`;
     const q = myQueue().length;
     const main = { SV: 'sinh-vien', KHOA: 'khoa', PDT: 'dao-tao', PP: 'pho-phong' }[role()];
     $('#nav').innerHTML = navItems().map(([id, label]) => `<a href="#${id}" class="${ui.route === id ? 'active' : ''}">${esc(label)}${id === main && q ? `<span class="count">${q}</span>` : ''}</a>`).join('');
@@ -769,6 +782,12 @@
   const enc = encodeURIComponent;
   const R = (sub) => `/api/requests/${enc(ui.open)}/${sub}`;
   const ACTIONS = {
+    'theme-toggle'() {
+      const theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      document.documentElement.dataset.theme = theme;
+      try { localStorage.setItem(THEME_KEY, theme); } catch (e) { toast('Không lưu được giao diện đã chọn trên trình duyệt.', 'err'); console.warn('Không lưu được lựa chọn giao diện.', e); }
+      renderChrome();
+    },
     goto(d) { if (d.tab) ui.tab[d.to] = d.tab; if (location.hash === '#' + d.to) render(); else location.hash = d.to; },
     tab(d) { ui.tab[d.page] = d.tab; if (d.page === 'he-thong' && d.tab === 'grades') ui.adminGrades = null; render(); },
     async open(d) { if (!d.id || d.id === 'undefined') return; ui.open = d.id; ui.dtab = 'overview'; ui.confirm = null; await loadDetail(); renderDrawer(); },
