@@ -43,7 +43,7 @@ LOP = {"Hệ thống thông tin quản lý": "K21", "Quản trị kinh doanh": "
 
 # mssv, họ tên, ngày sinh, giới tính, ngành, năm nhập học, trạng thái, điểm TB kỳ vọng, số học kỳ, kịch bản
 STUDENTS = [
-    ("241121521209", "Ngô Quỳnh Dương", "2004-04-12", "Nữ", "Hệ thống thông tin quản lý", 2024, "Đang học", 8.1, 4, "Demo chính — tài khoản được dùng cho sinh viên chính"),
+    ("241121521209", "Ngô Quỳnh Dương", "2004-04-12", "Nam", "Hệ thống thông tin quản lý", 2024, "Đang học", 8.1, 4, "Demo chính — tài khoản được dùng cho sinh viên chính"),
     ("241121521229", "Võ Trương Gia Nghi", "2004-01-08", "Nữ", "Hệ thống thông tin quản lý", 2024, "Đang học", 7.8, 4, "Demo chính — tài khoản được dùng cho sinh viên chính"),
     ("2421121521231", "Lê Thị Thanh Nhàn", "2004-07-19", "Nữ", "Hệ thống thông tin quản lý", 2024, "Đang học", 8.4, 4, "Demo chính — tài khoản được dùng cho sinh viên chính"),
     ("241121521243", "Trần Tôn Phương Thảo", "2004-10-02", "Nữ", "Hệ thống thông tin quản lý", 2024, "Đang học", 8.0, 4, "Demo chính — tài khoản được dùng cho sinh viên chính"),

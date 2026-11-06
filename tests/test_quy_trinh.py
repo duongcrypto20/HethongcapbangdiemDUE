@@ -338,6 +338,24 @@ class NhanhMoiCuaBpmnDaSua(unittest.TestCase):
         self.assertEqual(st["221121502102"], "CHO_PHE_DUYET")
         self.assertTrue(any(m["step"] == "t_nhackhoa" for m in db.outbox))
 
+    def test_tc20_du_lieu_demo_sau_nu_sinh_diem_deterministic(self):
+        data = S.build_data()
+        target_ids = {
+            "241121521209": "Nam",
+            "241121521220": "Nữ",
+            "241121521229": "Nữ",
+            "241121521230": "Nữ",
+            "241121521243": "Nữ",
+            "2421121521231": "Nữ",
+        }
+        students = {student["mssv"]: student for student in data["students"]}
+        grades = [grade for grade in data["grades"] if grade["mssv"] in target_ids]
+
+        self.assertEqual({mssv: students[mssv]["gioiTinh"] for mssv in target_ids}, target_ids)
+        self.assertEqual(len(grades), len(target_ids) * 20)
+        self.assertTrue(all(0 <= grade["diem10"] <= 10 for grade in grades))
+        self.assertTrue(all(grade["diemChu"] == E.letter_of(grade["diem10"])["letter"] for grade in grades))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -61,6 +61,12 @@ Phòng Đào tạo cũng chạy được bộ kịch bản quy trình ngay trên
 
 ## Dùng dữ liệu test của giảng viên
 
+Các tài khoản demo Ngô Quỳnh Dương, Võ Thị Lạc, Võ Trương Gia Nghi, Đinh Thị Mỹ Ngọc,
+Trần Tôn Phương Thảo và Lê Thị Thanh Nhàn có dữ liệu điểm hư cấu, được sinh xác định
+để phục vụ demo. Dương được ghi giới tính Nam; các tài khoản còn lại ghi Nữ. Không dùng
+dữ liệu demo làm kết quả học tập thật. Có thể nạp các hồ sơ và điểm này từ hai tệp
+`data/demo-sinh-vien-bo-sung.csv` và `data/demo-diem-bo-sung.csv`.
+
 1. Đăng nhập `pdt.hong` › **Hệ thống & dữ liệu › Khôi phục dữ liệu** › "Xóa sạch để nạp dữ liệu giảng viên" (bấm 2 lần).
 2. **CSDL sinh viên**: dán CSV hoặc chọn tệp. Cột `mssv, ho_ten, ngay_sinh, gioi_tinh, lop, khoa, nganh, khoa_hoc, email, trang_thai`. Mỗi sinh viên được tạo tài khoản đăng nhập bằng họ tên (mật khẩu là MSSV), mỗi Khoa mới được tạo tài khoản văn phòng Khoa.
 3. **CSDL điểm**: cột `mssv, nam_hoc, hoc_ky, ma_hp, ten_hp, so_tc, diem_10, diem_chu`.
