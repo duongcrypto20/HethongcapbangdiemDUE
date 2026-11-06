@@ -96,6 +96,67 @@ class XacThucThongTin(unittest.TestCase):
         self.assertFalse(bad["valid"], bad["nameSimilarity"])
 
 
+class NgoaiLeDuLieuDauVao(unittest.TestCase):
+    def test_tc20_mssv_khong_ton_tai_chuyen_sang_bo_sung(self):
+        db = fresh_db()
+        r = E.submit_request(db, {
+            "mssv": "000000000000", "hoTen": "Sinh viên không tồn tại",
+            "ngaySinh": "2004-01-01", "email": "sv@example.com",
+            "sdt": "0912345678", "mucDich": "Nộp hồ sơ học bổng",
+        })
+
+        self.assertEqual(r["status"], "CHO_BO_SUNG")
+        failed_codes = {item["code"] for item in r["validation"]["items"] if not item["ok"]}
+        self.assertIn("X1", failed_codes)
+        self.assertIn("X4", failed_codes)
+        self.assertTrue(any(mail["step"] == "Activity_0ze94gf" for mail in db.outbox))
+
+    def test_tc21_thong_tin_ca_nhan_sai_bi_bao_loi_tuong_ung(self):
+        db = fresh_db()
+        st = E.find_student(db, "221121521101")
+        st["trangThai"] = "Đã xóa tên"
+        invalid_form = {
+            **form(db, st["mssv"]), "ngaySinh": "01/01/2000",
+            "email": "khong-phai-email", "sdt": "12345", "mucDich": "abc",
+        }
+
+        result = E.validate_form(db, invalid_form)
+        failed_codes = {item["code"] for item in result["items"] if not item["ok"]}
+
+        self.assertFalse(result["valid"])
+        self.assertTrue({"X3", "X4", "X5", "X6", "X7"}.issubset(failed_codes))
+
+    def test_tc22_so_ban_giay_phai_trong_gioi_han(self):
+        db = fresh_db()
+        base_form = {**form(db, "221121521101"), "banGiay": True}
+
+        for copies in (1, db.config["maxCopies"]):
+            with self.subTest(copies=copies):
+                result = E.validate_form(db, {**base_form, "soBan": copies})
+                self.assertTrue(result["valid"], result["items"])
+
+        for copies in (0, db.config["maxCopies"] + 1, True):
+            with self.subTest(copies=copies):
+                result = E.validate_form(db, {**base_form, "soBan": copies})
+                x8 = next(item for item in result["items"] if item["code"] == "X8")
+                self.assertFalse(x8["ok"])
+
+    def test_tc23_diem_sai_thang_diem_tin_chi_va_thieu_ma_hoc_phan(self):
+        db = fresh_db()
+        student_id = "221121521101"
+        rows = E.grades_of(db, student_id)
+        rows[0]["diem10"] = 10.1
+        rows[1]["diemChu"] = "F"
+        rows[2]["soTC"] = 0
+        rows[3]["maHP"] = ""
+
+        r = E.submit_request(db, form(db, student_id))
+        error_codes = {error["code"] for error in r["check"]["errors"]}
+
+        self.assertEqual(r["status"], "CHO_KHOA")
+        self.assertTrue({"D2", "D3", "D4", "D7"}.issubset(error_codes))
+
+
 class DoiChieuVaKhoa(unittest.TestCase):
     def test_tc04_thieu_diem_khoa_hieu_chinh(self):
         """TC04 g_diem(Không) → t_khoa → g_kh(Có) → g_mdc → t_doichieu → g_diem(Có) → t_tao"""
