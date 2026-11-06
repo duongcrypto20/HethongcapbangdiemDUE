@@ -405,6 +405,8 @@ def create_app(test_config: dict | None = None) -> Flask:
                 rows = E.grades_of(db, req["form"]["mssv"])
                 out["grades"] = rows
                 out["liveCheck"] = E.check_grades(db, req["form"]["mssv"], req["acks"])
+                if g.user["role"] == "KHOA" and req["status"] == "CHO_KHOA":
+                    out["reviewAssistant"] = E.grade_review_assistance(out["liveCheck"])
                 out["terms"] = list(dict.fromkeys(f"{r['hocKy']} {r['namHoc']}" for r in
                                                   sorted(rows, key=lambda r: (E.term_order(r), r["maHP"]))))
             return out

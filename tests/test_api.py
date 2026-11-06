@@ -97,6 +97,25 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(depts, {"Khoa Thống kê – Tin học"})
         del reqs
 
+    def test_khoa_detail_shows_read_only_assistance_not_other_roles(self):
+        khoa = self.login("khoa.thongketinhoc")
+        pending = next(
+            r for r in khoa.get("/api/state").get_json()["requests"]
+            if r["status"] == "CHO_KHOA"
+        )
+        response = khoa.get(f"/api/requests/{pending['id']}")
+
+        self.assertEqual(response.status_code, 200, response.get_json())
+        assistant = response.get_json()["reviewAssistant"]
+        self.assertEqual(assistant["method"], "local-rules")
+        self.assertTrue(assistant["readOnly"])
+        self.assertTrue(assistant["humanDecisionRequired"])
+        self.assertIn("không tự sửa dữ liệu", assistant["limitations"])
+
+        pdt = self.login("pdt.hong")
+        pdt_detail = pdt.get(f"/api/requests/{pending['id']}").get_json()
+        self.assertNotIn("reviewAssistant", pdt_detail)
+
     def test_csrf_bat_buoc(self):
         sv = self.login("221121521101")
         r = sv.post("/api/requests", json={"mucDich": "Nộp hồ sơ học bổng"})

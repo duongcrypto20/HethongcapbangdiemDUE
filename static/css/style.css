@@ -211,6 +211,9 @@ table.grid input { width: 72px; padding: 3px 6px; border: 1px solid var(--line);
 .callout.warn { background: var(--warn-tint); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
 .callout.bad { background: var(--bad-tint); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
 .callout.ok { background: var(--ok-tint); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
+.grade-assistant { display: grid; gap: 6px; margin-bottom: 12px; }
+.grade-assistant p, .grade-assistant ul { margin: 0; }
+.grade-assistant ul { padding-left: 20px; display: grid; gap: 6px; }
 
 ul.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
 ul.checks li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 6px; align-items: start; }

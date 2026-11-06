@@ -587,6 +587,49 @@ def check_grades(db: Db, mssv: str, acks: list[str] | None = None) -> dict:
             "confidence": confidence, "threshold": cfg["confidenceThreshold"], "pass": passed}
 
 
+def grade_review_assistance(check: dict) -> dict:
+    """Create read-only review suggestions from existing deterministic grade checks."""
+    guidance = {
+        "D0": "Kiểm tra việc nhập đúng MSSV và xác nhận dữ liệu đã được đồng bộ từ nguồn điểm chính thức.",
+        "D1": "Đối chiếu học phần với bảng điểm gốc để xác định điểm đang thiếu hay chưa được cập nhật.",
+        "D2": "Đối chiếu điểm với nguồn điểm chính thức; không tự sửa hoặc suy đoán giá trị thay thế.",
+        "D3": "Kiểm tra quy tắc quy đổi điểm chữ và đối chiếu điểm số với nguồn chính thức trước khi hiệu chỉnh.",
+        "D4": "Đối chiếu số tín chỉ với chương trình đào tạo hoặc danh mục học phần đã được phê duyệt.",
+        "D5": "So sánh các dòng trùng với bảng điểm gốc và lịch sử nhập; chỉ xử lý sau khi Khoa xác nhận.",
+        "D7": "Tra cứu mã và tên học phần trong danh mục đào tạo; xác minh với nguồn chính thức nếu vẫn chưa rõ.",
+        "A1": "Đây chỉ là dấu hiệu lệch so với điểm trung bình, không chứng minh điểm sai. Hãy đối chiếu nguồn chính thức và ghi nhận quyết định của Khoa.",
+        "I1": "Xác minh đây là học lại/cải thiện hợp lệ và áp dụng quy định tính điểm hiện hành.",
+    }
+    findings = []
+    for level in ("errors", "warnings", "infos"):
+        severity = {"errors": "error", "warnings": "warning", "infos": "info"}[level]
+        for item in check.get(level, []):
+            code = item.get("code", "")
+            findings.append({
+                "severity": severity,
+                "code": code,
+                "gradeId": item.get("gradeId"),
+                "message": item.get("msg", ""),
+                "suggestion": guidance.get(
+                    code, "Đối chiếu thông tin với hồ sơ nguồn và áp dụng quy trình nghiệp vụ hiện hành."
+                ),
+            })
+    return {
+        "method": "local-rules",
+        "readOnly": True,
+        "humanDecisionRequired": True,
+        "summary": (
+            f"{len(check.get('errors', []))} lỗi, {len(check.get('warnings', []))} dấu hiệu cần xác minh, "
+            f"{len(check.get('infos', []))} ghi chú."
+        ),
+        "findings": findings,
+        "limitations": (
+            "Gợi ý được tạo bằng luật D0-D7/A1/I1 từ CSDL hiện có; hệ thống không truy cập sổ điểm gốc, "
+            "không xác định nguyên nhân thay con người và không tự sửa dữ liệu."
+        ),
+    }
+
+
 def fmt_num(x: Any) -> str:
     if is_num(x) and float(x).is_integer():
         return str(int(x))

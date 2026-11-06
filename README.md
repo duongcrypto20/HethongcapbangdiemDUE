@@ -45,6 +45,10 @@ python -m unittest discover -s tests -v
 
 Phòng Đào tạo cũng chạy được bộ kịch bản quy trình ngay trên web: **Hệ thống & dữ liệu › Kiểm thử tự động**.
 
+## Hỗ trợ Khoa rà soát điểm
+
+Khi yêu cầu cần Khoa xử lý, màn hình chi tiết hiển thị gợi ý đọc-chỉ dựa trên các luật đối chiếu điểm D0-D7, A1 và I1 hiện có. Đây là hỗ trợ theo luật cục bộ, không kết nối mô hình AI/LLM hay gửi dữ liệu ra dịch vụ ngoài; hệ thống cũng không đọc được sổ điểm gốc nên không thể kết luận nguyên nhân hoặc tự hiệu chỉnh. Khoa phải tự đối chiếu nguồn chính thức và quyết định mọi thao tác sửa điểm.
+
 ## Kịch bản demo nhanh
 
 | # | Đăng nhập | Thao tác | Phần tử BPMN |

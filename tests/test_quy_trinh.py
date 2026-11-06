@@ -158,6 +158,24 @@ class NgoaiLeDuLieuDauVao(unittest.TestCase):
 
 
 class DoiChieuVaKhoa(unittest.TestCase):
+    def test_grade_review_assistance_gives_read_only_rule_based_guidance(self):
+        check = {
+            "errors": [{"code": "D3", "gradeId": "g1", "msg": "Điểm chữ không khớp điểm số"}],
+            "warnings": [{"code": "A1", "gradeId": "g2", "msg": "Điểm lệch so với trung bình"}],
+            "infos": [{"code": "I1", "msg": "Học phần được học lại"}],
+        }
+        original = copy.deepcopy(check)
+
+        result = E.grade_review_assistance(check)
+
+        self.assertEqual(check, original)
+        self.assertEqual(result["method"], "local-rules")
+        self.assertTrue(result["readOnly"])
+        self.assertTrue(result["humanDecisionRequired"])
+        self.assertEqual([item["severity"] for item in result["findings"]], ["error", "warning", "info"])
+        self.assertIn("không chứng minh điểm sai", result["findings"][1]["suggestion"])
+        self.assertIn("không tự sửa dữ liệu", result["limitations"])
+
     def test_tc04_thieu_diem_khoa_hieu_chinh(self):
         """TC04 g_diem(Không) → t_khoa → g_kh(Có) → g_mdc → t_doichieu → g_diem(Có) → t_tao"""
         db = fresh_db()

@@ -758,12 +758,16 @@
   }
   function khoaBox(req, box) {
     const live = app.detail.liveCheck;
+    const assistant = app.detail.reviewAssistant;
     const rows = app.detail.grades || [];
     const flagged = {};
     for (const e of live.errors) if (e.gradeId) flagged[e.gradeId] = 'err';
     for (const w of live.warnings) if (w.gradeId && !flagged[w.gradeId]) flagged[w.gradeId] = 'warnrow';
     const show = rows.filter((r) => flagged[r.id]).concat(rows.filter((r) => !flagged[r.id]));
     return box('Rà soát & hiệu chỉnh điểm', `
+      ${assistant ? `<div class="callout info grade-assistant"><b>Hỗ trợ rà soát theo luật cục bộ</b><div>${esc(assistant.summary)}</div>
+        ${assistant.findings.length ? `<ul>${assistant.findings.map((item) => `<li><b>${esc(item.code)}</b> ${esc(item.message)}<br><span class="muted">Gợi ý: ${esc(item.suggestion)}</span></li>`).join('')}</ul>` : '<p>Không phát hiện vấn đề theo các luật hiện có.</p>'}
+        <p class="muted">${esc(assistant.limitations)}</p><p><b>Khoa tự đối chiếu nguồn điểm và quyết định; công cụ này chỉ đọc, không tự sửa điểm.</b></p></div>` : ''}
       <div class="callout ${live.pass ? 'ok' : 'warn'}">Kiểm tra lại theo dữ liệu hiện tại: <b>${live.errors.length} lỗi, ${live.warnings.length} bất thường</b>, độ tin cậy ${Math.round(live.confidence * 100)}% (ngưỡng ${Math.round(live.threshold * 100)}%). ${live.pass ? 'Đã đủ điều kiện, bấm "Đã hiệu chỉnh xong".' : 'Sửa các dòng tô màu hoặc xác nhận điểm bất thường.'}</div>
       ${live.errors.length ? `<ul class="checks">${live.errors.map((e) => `<li><span class="ic bad">✕</span><span><b class="mono">${e.code}</b> ${esc(e.msg)}</span></li>`).join('')}</ul>` : ''}
       ${live.warnings.length ? `<ul class="checks">${live.warnings.map((w) => `<li><span class="ic warn">!</span><span>${esc(w.msg)} <button class="btn small" data-action="khoa-ack" data-key="${w.key}">Xác nhận điểm đúng</button></span></li>`).join('')}</ul>` : ''}
